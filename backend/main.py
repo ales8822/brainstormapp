@@ -3,6 +3,7 @@ import google.generativeai as genai
 from fastapi import FastAPI
 from pydantic import BaseModel
 from dotenv import load_dotenv
+from fastapi.middleware.cors import CORSMiddleware # <-- ADD THIS IMPORT
 
 # Load environment variables from the .env file
 load_dotenv()
@@ -16,6 +17,23 @@ genai.configure(api_key=api_key)
 # Initialize the FastAPI app
 app = FastAPI()
 
+# --- ADD CORS MIDDLEWARE ---
+# This allows your frontend (running on a different address) to communicate with your backend.
+origins = [
+    "http://127.0.0.1:5500", # Common address for VS Code Live Server
+    "http://localhost:5500", # Also a common address for VS Code Live Server
+    "http://localhost:8000", # Allow requests from backend itself (for docs)
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"], # Allows all methods (GET, POST, etc.)
+    allow_headers=["*"], # Allows all headers
+)
+# -------------------------
+
 # Define the data model for incoming requests
 class BrainstormRequest(BaseModel):
     prompt: str
@@ -27,18 +45,10 @@ async def brainstorm_idea(request: BrainstormRequest):
     Receives a prompt and uses Gemini to brainstorm on it.
     """
     try:
-        # Initialize the Gemini model
-        # NOTE: As of now, the model is 'gemini-1.5-flash'. 'gemini-2.0-flash' is a placeholder for the future.
-        # We will use the latest available flash model.
         model = genai.GenerativeModel('gemini-2.0-flash')
-
-        # Generate content using the provided prompt
         response = model.generate_content(request.prompt)
-
-        # Return the generated text
         return {"response": response.text}
     except Exception as e:
-        # Handle potential errors during API call
         return {"error": str(e)}
 
 # A simple root endpoint to check if the server is running
