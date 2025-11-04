@@ -2,20 +2,28 @@ body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
     background-color: #f4f6f8;
     color: #333;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    min-height: 100vh;
     margin: 0;
+    padding: 0;
+    display: flex;
 }
 
-.container {
-    width: 80%;
-    max-width: 800px;
-    background-color: #fff;
+.main-container {
+    display: flex;
+    width: 100vw;
+    height: 100vh;
+}
+
+.controls-container {
+    width: 30%;
+    min-width: 400px;
+    max-width: 500px;
     padding: 40px;
-    border-radius: 12px;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+    background-color: #fff;
+    box-shadow: 2px 0px 15px rgba(0, 0, 0, 0.08);
+    z-index: 10;
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box; /* Ensures padding is included in width */
 }
 
 h1 {
@@ -36,7 +44,7 @@ p {
 
 textarea {
     width: 100%;
-    min-height: 100px;
+    min-height: 120px;
     padding: 15px;
     border: 1px solid #dfe6e9;
     border-radius: 8px;
@@ -62,26 +70,149 @@ button:hover {
     background-color: #2980b9;
 }
 
-.response-area {
-    margin-top: 40px;
-}
-
-#response-container {
-    background-color: #ecf0f1;
-    border-radius: 8px;
-    padding: 20px;
-    min-height: 150px;
-    white-space: pre-wrap; /* Preserves formatting like newlines */
+#cy {
+    flex-grow: 1; /* Takes up the remaining space */
+    height: 100%;
+    background-color: #eef2f5;
 }
 
 .loader {
-    border: 5px solid #f3f3f3; /* Light grey */
-    border-top: 5px solid #3498db; /* Blue */
+    border: 5px solid #f3f3f3;
+    border-top: 5px solid #3498db;
     border-radius: 50%;
     width: 40px;
     height: 40px;
     animation: spin 1s linear infinite;
     margin: 20px auto;
+}
+
+
+/* Style for the visual highlight on a selected node */
+.selected-node {
+    border-color: #f1c40f;
+    border-width: 5px;
+    border-style: solid;
+}
+
+/* Style for the new info box in the control panel */
+.selection-box {
+    background-color: #ecf0f1;
+    border-radius: 8px;
+    padding: 15px;
+    margin-bottom: 20px;
+}
+
+.selection-box h2 {
+    margin-top: 0;
+    font-size: 18px;
+    color: #2c3e50;
+}
+
+#selected-node-text {
+    font-size: 15px;
+    line-height: 1.6;
+    white-space: pre-wrap; /* Preserves formatting */
+    max-height: 200px;
+    overflow-y: auto; /* Adds a scrollbar if text is long */
+}
+
+/* Style for the input label */
+#prompt-label {
+    font-weight: bold;
+    margin-bottom: 8px;
+    color: #34495e;
+}
+
+/* === MODAL STYLES === */
+
+/* The dark semi-transparent background */
+.modal-overlay {
+    position: fixed; /* Sits on top of everything */
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.6);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000; /* Ensures it's on top */
+}
+
+/* The white content box of the modal */
+.modal-content {
+    background-color: #fff;
+    padding: 30px;
+    border-radius: 12px;
+    box-shadow: 0 5px 25px rgba(0,0,0,0.2);
+    width: 60%;
+    max-width: 700px;
+    max-height: 80vh; /* Max height is 80% of the viewport height */
+    display: flex;
+    flex-direction: column;
+}
+
+#modal-title {
+    margin-top: 0;
+    color: #2c3e50;
+    border-bottom: 1px solid #dfe6e9;
+    padding-bottom: 15px;
+}
+
+#modal-text-content {
+    flex-grow: 1; /* Allows this section to grow and fill space */
+    overflow-y: auto; /* Adds a scrollbar if content is too long */
+    line-height: 1.7;
+    margin-bottom: 20px;
+    white-space: pre-wrap; /* Respects newlines and formatting */
+}
+
+/* Container for the action buttons */
+.modal-actions {
+    display: flex;
+    justify-content: flex-end; /* Aligns buttons to the right */
+    gap: 15px; /* Adds space between buttons */
+}
+
+/* Styling for the red "Delete" button */
+.modal-actions button.danger {
+    background-color: #e74c3c;
+}
+
+.modal-actions button.danger:hover {
+    background-color: #c0392b;
+}
+
+/* === STATUS CONTROL STYLES === */
+.status-controls {
+    display: flex;
+    gap: 10px;
+    margin-top: 15px;
+    padding-top: 20px;
+    border-top: 1px solid #dfe6e9;
+}
+
+.status-btn {
+    flex-grow: 1;
+    padding: 10px;
+    font-size: 14px;
+    font-weight: bold;
+    border: 2px solid transparent;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+/* Define colors for each status */
+.status-btn[data-status="Idea"] { background-color: #ecf0f1; color: #34495e; }
+.status-btn[data-status="InProgress"] { background-color: #f39c12; color: #fff; }
+.status-btn[data-status="Completed"] { background-color: #27ae60; color: #fff; }
+.status-btn[data-status="Archived"] { background-color: #95a5a6; color: #fff; }
+
+/* Style for the currently active status button */
+.status-btn.active {
+    border-color: #3498db;
+    transform: scale(1.05);
 }
 
 @keyframes spin {

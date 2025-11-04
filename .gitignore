@@ -41,3 +41,7 @@ instance/
 # IDE files
 .idea/
 *.iml
+
+# SQLite database
+*.db
+*.db-journal*
