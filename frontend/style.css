@@ -314,3 +314,45 @@ h3 {
 #refresh-models-button:hover {
   background-color: #5a6268;
 }
+#active-model-display {
+  position: absolute;
+  bottom: 25px;
+  right: 25px;
+  background-color: rgba(255, 255, 255, 0.8);
+  padding: 8px 12px;
+  border-radius: 15px;
+  font-size: 12px;
+  font-weight: bold;
+  color: #34495e;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  z-index: 100;
+}
+
+.modal-header {
+  border-bottom: 1px solid #dfe6e9;
+  padding-bottom: 15px;
+  margin-bottom: 20px;
+}
+.modal-header h2 {
+  margin: 0;
+}
+#modal-generated-by {
+  display: block;
+  font-size: 12px;
+  color: #7f8c8d;
+  margin-top: 5px;
+}
+
+.message-header {
+  font-size: 11px;
+  font-weight: bold;
+  color: #95a5a6;
+  margin-bottom: 4px;
+}
+
+/* Adjust chat message for the header */
+.chat-message.model {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}

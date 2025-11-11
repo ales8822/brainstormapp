@@ -8,7 +8,7 @@ def get_db_connection():
     """Establishes a connection to the database."""
     con = sqlite3.connect(DB_FILE)
     con.row_factory = sqlite3.Row
-    con.execute("PRAGMA foreign_keys = ON") # Essential for cascade deletes
+    con.execute("PRAGMA foreign_keys = ON")
     return con
 
 def init_db():
@@ -17,28 +17,26 @@ def init_db():
     con = get_db_connection()
     cur = con.cursor()
     
-    # Create nodes table
+    # ADD generated_by column to nodes
     cur.execute("""
         CREATE TABLE IF NOT EXISTS nodes (
             id TEXT PRIMARY KEY,
             label TEXT NOT NULL,
             fullText TEXT NOT NULL,
             is_ai_node BOOLEAN NOT NULL,
-            status TEXT NOT NULL DEFAULT 'Idea'
+            status TEXT NOT NULL DEFAULT 'Idea',
+            generated_by TEXT
         )
     """)
-    # Create edges table
     cur.execute("""
         CREATE TABLE IF NOT EXISTS edges (
-            source_id TEXT NOT NULL,
-            target_id TEXT NOT NULL,
-            label TEXT,
+            source_id TEXT NOT NULL, target_id TEXT NOT NULL, label TEXT,
             FOREIGN KEY (source_id) REFERENCES nodes (id) ON DELETE CASCADE,
             FOREIGN KEY (target_id) REFERENCES nodes (id) ON DELETE CASCADE,
             PRIMARY KEY (source_id, target_id)
         )
     """)
-    # Create chat_messages table
+    # ADD generated_by column to chat_messages
     cur.execute("""
         CREATE TABLE IF NOT EXISTS chat_messages (
             id TEXT PRIMARY KEY,
@@ -46,30 +44,25 @@ def init_db():
             role TEXT NOT NULL,
             content TEXT NOT NULL,
             timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+            generated_by TEXT,
             FOREIGN KEY (node_id) REFERENCES nodes (id) ON DELETE CASCADE
         )
     """)
+    cur.execute("CREATE TABLE IF NOT EXISTS app_settings (key TEXT PRIMARY KEY, value TEXT)")
 
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS app_settings (
-            key TEXT PRIMARY KEY,
-            value TEXT
-        )
-    """)
-    # Seed initial default setting if table is empty
+    # Seed initial default settings
     cur.execute("INSERT OR IGNORE INTO app_settings (key, value) VALUES ('ai_provider', 'gemini')")
-    
     cur.execute("INSERT OR IGNORE INTO app_settings (key, value) VALUES ('ollama_model_name', 'llama3')")
-    # --- Safe Migrations ---
-    # These will add columns if they don't exist, without crashing on subsequent runs.
+
+    # Safe Migrations
     def add_column(table, column, col_type):
-        try:
-            cur.execute(f"ALTER TABLE {table} ADD COLUMN {column} {col_type}")
-        except sqlite3.OperationalError:
-            pass # Column already exists
+        try: cur.execute(f"ALTER TABLE {table} ADD COLUMN {column} {col_type}")
+        except: pass
     
     add_column("nodes", "status", "TEXT NOT NULL DEFAULT 'Idea'")
     add_column("edges", "label", "TEXT")
+    add_column("nodes", "generated_by", "TEXT")
+    add_column("chat_messages", "generated_by", "TEXT")
 
     con.commit()
     con.close()

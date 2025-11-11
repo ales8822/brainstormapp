@@ -6,9 +6,9 @@ from ..services.llm_service import llm_service
 from ..database import queries
 import uuid
 
-router = APIRouter()
+router = APIRouter(prefix="/api", tags=["graph"])
 
-@router.get("/api/graph")
+@router.get("/graph")
 def get_graph():
     # (This function is unchanged)
     nodes_res, edges_res = queries.get_full_graph_db()
@@ -23,7 +23,7 @@ def get_graph():
         elements.append({"group": "edges", "data": edge_data})
     return elements
 
-@router.put("/api/nodes/{node_id}/status")
+@router.put("/nodes/{node_id}/status")
 def update_node_status(node_id: str, request: StatusUpdateRequest):
     # (This function is unchanged)
     valid_statuses = ['Idea', 'InProgress', 'Completed', 'Archived']
@@ -31,7 +31,7 @@ def update_node_status(node_id: str, request: StatusUpdateRequest):
     queries.update_node_status_db(node_id, request.status)
     return {"status": "success", "updated_id": node_id, "new_status": request.status}
 
-@router.delete("/api/nodes/{node_id}")
+@router.delete("/nodes/{node_id}")
 def delete_node(node_id: str):
     # (This function is unchanged)
     queries.delete_branch_db(node_id)
@@ -39,40 +39,25 @@ def delete_node(node_id: str):
 
 
 # --- THIS IS THE CORRECTED ENDPOINT ---
-@router.post("/api/brainstorm")
+@router.post("/brainstorm")
 async def brainstorm_idea(request: BrainstormRequest):
-    ai_response_data = {}
     try:
-        # 1. Get the structured response from the AI
-        ai_response_data = llm_service.get_brainstorm_response(request.prompt, request.parent_context)
+        result = llm_service.get_brainstorm_response(request.prompt, request.parent_context)
+        ai_response_data = result["response"]
+        model_name_used = result["model_name"]
 
-    except ValueError as e:
-        # --- THE FIX: Gracefully handle missing API key error ---
-        print(f"Handled configuration error: {e}")
-        # Create a user-friendly error response that looks like a valid AI response
-        ai_response_data = {
-            "label": "Configuration Error",
-            "fullText": str(e)
-        }
-    except Exception as e:
-        # For all other unexpected errors, still raise a 500 error
-        print(f"Error in brainstorm_idea endpoint: {e}")
-        import traceback
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
-
-    # This part of the code will now run for both successful and error responses
-    try:
         source_node_id = request.source_node_id
         if request.parent_context and source_node_id:
-            ai_node_id = queries.extend_idea_branch_db(source_node_id, request.prompt, ai_response_data)
+            ai_node_id = queries.extend_idea_branch_db(source_node_id, request.prompt, ai_response_data, model_name_used)
         else:
-            ai_node_id = queries.create_new_idea_branch_db(source_node_id, request.prompt, ai_response_data)
+            ai_node_id = queries.create_new_idea_branch_db(source_node_id, request.prompt, ai_response_data, model_name_used)
             
-        return {
-            "user_node_id": source_node_id,
-            "ai_node": {"id": ai_node_id, "label": ai_response_data["label"], "fullText": ai_response_data["fullText"]},
-        }
+        return { "user_node_id": source_node_id, "ai_node": {"id": ai_node_id, "label": ai_response_data["label"], "fullText": ai_response_data["fullText"]},}
+
+    except ValueError as e:
+        # --- THE FIX: Raise HTTPException for config errors ---
+        print(f"Handled configuration error: {e}")
+        raise HTTPException(status_code=400, detail=str(e)) # 400 is "Bad Request"
     except Exception as e:
-        print(f"Error saving to database after AI response: {e}")
-        raise HTTPException(status_code=500, detail=f"Error saving to DB: {e}")
+        print(f"Error in LLM service call: {e}")
+        raise HTTPException(status_code=500, detail=f"LLM service failed: {e}")
