@@ -45,3 +45,5 @@ instance/
 # SQLite database
 *.db
 *.db-journal*
+
+frontend/uploads/*

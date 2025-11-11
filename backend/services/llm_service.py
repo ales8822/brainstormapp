@@ -190,53 +190,76 @@ class LLMService:
             raise ValueError("Unknown API mode detected.")
 
     def _get_ollama_brainstorm(self, prompt: str, context: str = None, attachment_path: str = None) -> dict:
-        settings = queries.get_settings_db()
-        base_url = settings.get('runpod_url')
-        if not base_url: raise ValueError("RunPod URL not configured in settings.")
-
-        api_mode = 'pure_ollama' # We are standardizing on the pure Ollama template now
-        url = f"{base_url.rstrip('/')}/api/generate"
+        settings = queries.get_settings_db(); base_url = settings.get('runpod_url')
+        if not base_url: raise ValueError("RunPod URL is not configured.")
         
-        model_name = settings.get('ollama_model_name', 'llava') # Default to a vision model
-        print(f"Using Ollama model: {model_name} in '{api_mode}' mode.")
+        # --- THE FIX: Using the correct endpoint and payload for Qwen-VL ---
+        url = f"{base_url.rstrip('/')}/v1/chat/completions"
+        model_name = settings.get('ollama_model_name', 'qwen2-vl:latest')
+        print(f"Calling Qwen-VL compatible API at: {url} with model: {model_name}")
 
-        instruction = f'Directly respond to the user prompt about the provided context and/or image: "{prompt}"'
+        instruction = f'Directly respond to: "{prompt}"'
         if context: instruction = f'Given context: "{context}", respond to: "{prompt}"'
-        prompt_for_llm = f'{instruction}\n\nYou MUST expand the answer so it is actually useful to the user.Format your entire output as a single, raw JSON object with keys "label" and "fullText".'
+        prompt_for_llm = f'{instruction}\n\nFormat your output as a single, raw JSON object with keys "label" and "fullText".'
 
-        payload = {"model": model_name, "prompt": prompt_for_llm, "stream": False, "format": "json"}
-        
-        # Add image data if present
+        # Build the specific content list format for Qwen-VL
+        user_content = []
         if attachment_path:
             base64_image = self._prepare_image_for_ollama(attachment_path)
             if base64_image:
-                # LLaVA and other vision models expect the 'images' key
-                payload['images'] = [base64_image]
-
-        response = requests.post(url, json=payload, timeout=120) # Longer timeout for images
+                # Format as data URL
+                user_content.append({
+                    "type": "image_url",
+                    "image_url": { "url": f"data:image/png;base64,{base64_image}" }
+                })
+        
+        user_content.append({"type": "text", "text": prompt_for_llm})
+        
+        payload = {"model": model_name, "messages": [{"role": "user", "content": user_content}], "stream": False}
+        
+        response = requests.post(url, json=payload, timeout=120)
         response.raise_for_status()
-        return json.loads(response.json()['response'])
+        
+        response_data = response.json()
+        ai_content_str = response_data['choices'][0]['message']['content']
+        return json.loads(ai_content_str)
 
     def _get_ollama_chat(self, history: List, user_message: str, node_context: str, attachment_path: str = None) -> str:
         settings = queries.get_settings_db(); base_url = settings.get('runpod_url')
         if not base_url: raise ValueError("RunPod URL is not configured.")
-        url = f"{base_url.rstrip('/')}/api/generate"; model_name = settings.get('ollama_model_name', 'llava')
         
-        final_prompt = f"System Context:\n{node_context}\n\n"
-        for h in history: final_prompt += f"{h['role']}: {h['parts'][0]}\n"
-        final_prompt += f"user: {user_message}\nassistant:"
+        url = f"{base_url.rstrip('/')}/v1/chat/completions"
+        model_name = settings.get('ollama_model_name', 'qwen2-vl:latest')
 
-        payload = {"model": model_name, "prompt": final_prompt, "stream": False}
-
-        # --- THE FIX: Add the image to the payload ---
+        # For chat, we'll simplify and rebuild the context each time in the Qwen format
+        system_instruction = f"Use this text as context:\n{node_context}"
+        
+        # Rebuild history in the simpler format expected by many models
+        messages = [{"role": "system", "content": system_instruction}]
+        for h in history:
+            messages.append({"role": h.get('role', 'user'), "content": h.get('parts', [''])[0]})
+        
+        # Add the final user message, which can be multimodal
+        final_user_content = []
         if attachment_path:
             base64_image = self._prepare_image_for_ollama(attachment_path)
             if base64_image:
-                payload['images'] = [base64_image]
+                final_user_content.append({
+                    "type": "image_url",
+                    "image_url": { "url": f"data:image/png;base64,{base64_image}" }
+                })
+        
+        final_user_content.append({"type": "text", "text": user_message})
+
+        messages.append({"role": "user", "content": final_user_content})
+        
+        payload = {"model": model_name, "messages": messages, "stream": False}
         
         response = requests.post(url, json=payload, timeout=120)
         response.raise_for_status()
-        return response.json()['response']
+        
+        response_data = response.json()
+        return response_data['choices'][0]['message']['content']
 
     # --- Full Gemini and public functions for safety ---
     def _get_gemini_brainstorm(self, prompt: str, context: str = None, attachment_path: str = None) -> dict:
