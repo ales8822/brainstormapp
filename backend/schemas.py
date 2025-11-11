@@ -7,6 +7,7 @@ class BrainstormRequest(BaseModel):
     prompt: str
     parent_context: Optional[str] = None
     source_node_id: Optional[str] = None
+    attachment_path: Optional[str] = None
 
 class StatusUpdateRequest(BaseModel):
     status: str

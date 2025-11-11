@@ -25,7 +25,8 @@ def init_db():
             fullText TEXT NOT NULL,
             is_ai_node BOOLEAN NOT NULL,
             status TEXT NOT NULL DEFAULT 'Idea',
-            generated_by TEXT
+            generated_by TEXT,
+            attachment_path TEXT
         )
     """)
     cur.execute("""
@@ -63,6 +64,7 @@ def init_db():
     add_column("edges", "label", "TEXT")
     add_column("nodes", "generated_by", "TEXT")
     add_column("chat_messages", "generated_by", "TEXT")
+    add_column("nodes", "attachment_path", "TEXT")
 
     con.commit()
     con.close()

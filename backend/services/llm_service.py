@@ -3,9 +3,21 @@
 import json
 import requests
 import google.generativeai as genai
-from typing import List, Dict
+from google.api_core import exceptions as google_exceptions
+import base64
+from pathlib import Path
+from PIL import Image
+from typing import List, Dict, Optional
 from .. import config
 from ..database import queries
+
+
+# --- THE FIX: Define the project root correctly, once. ---
+# __file__ is in backend/services/llm_service.py
+# .parent -> services
+# .parent -> backend
+# .parent -> brainstorming_app (the project root)
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 
 # A simple in-memory cache for the detected API mode
 # { "base_url": "pure_ollama" | "serverless" }
@@ -36,6 +48,18 @@ class LLMService:
         response.raise_for_status()
         return response.json()
     
+    def _prepare_image_for_ollama(self, attachment_path: str) -> Optional[str]:
+        if not attachment_path:
+            return None
+        try:
+            full_path = PROJECT_ROOT / "frontend" / attachment_path
+            print(f"Opening image for Ollama: {full_path}")
+            with open(full_path, "rb") as image_file:
+                return base64.b64encode(image_file.read()).decode('utf-8')
+        except Exception as e:
+            print(f"Error processing image for Ollama: {e}")
+            return None
+        
     def _detect_and_cache_api_mode(self, base_url: str) -> str:
         """
         Detects the type of Ollama API at the given URL and caches the result.
@@ -165,92 +189,107 @@ class LLMService:
         else:
             raise ValueError("Unknown API mode detected.")
 
-    def _get_ollama_brainstorm(self, prompt: str, context: str = None) -> dict:
-        """
-        Brainstorm via Ollama and return parsed JSON {label, fullText}.
-        This stays structured to keep brainstorm deterministic (Option B).
-        """
-        settings = queries.get_settings_db(); runpod_url = settings.get('runpod_url')
-        if not runpod_url:
-            raise ValueError("RunPod URL not configured.")
-        model_name = settings.get('ollama_model_name', 'llama3')
-        instruction = f'Directly respond to: "{prompt}"'
-        if context:
-            instruction = f'Given context: "{context}", respond to: "{prompt}"'
-        prompt_for_llm = f'{instruction}\n\nYou MUST expand the answer so it is actually useful to the user.Format your entire output as a single, raw JSON object with keys "label" and "fullText".'
-        payload = {"model": model_name, "prompt": prompt_for_llm, "stream": False, "format": "json"}
-        url = f"{runpod_url.rstrip('/')}/api/generate"
-        response_data = self._get_ollama_response_safely(url, payload)
-        # response_data expected shape: {'response': '...'} where response is JSON string or already parsed
-        if isinstance(response_data, dict) and 'response' in response_data:
-            raw = response_data['response']
-        else:
-            raw = json.dumps(response_data)
-        # defensive parse
-        try:
-            return json.loads(raw)
-        except json.JSONDecodeError:
-            # try cleaning code fences
-            cleaned = raw.strip().replace('```json', '').replace('```', '')
-            try:
-                return json.loads(cleaned)
-            except json.JSONDecodeError:
-                print(f"Ollama brainstorm failed to return valid JSON. Raw text: {raw}")
-                return {"label": "Formatting Error", "fullText": "The AI failed to return a response in the correct JSON format."}
+    def _get_ollama_brainstorm(self, prompt: str, context: str = None, attachment_path: str = None) -> dict:
+        settings = queries.get_settings_db()
+        base_url = settings.get('runpod_url')
+        if not base_url: raise ValueError("RunPod URL not configured in settings.")
 
-    def _get_ollama_chat(self, history: List, user_message: str, node_context: str) -> str:
-        """
-        Chat path for Ollama (pure or serverless), unified to the "background is not constraint"
-        instruction. Returns assistant text.
-        """
-        # We proxy into _get_ollama_response with is_brainstorm=False to reuse detection logic
-        result = self._get_ollama_response(
-            user_message,
-            f"{node_context}\n\nIMPORTANT: Do not limit to only the provided info. Think in all directions relevant to the topic. Use world knowledge freely.",
-            history,
-            is_brainstorm=False
-        )
-        # result is expected to be a string (assistant content) or serialized fallback
-        if isinstance(result, str):
-            return result
-        # If dict returned unexpectedly, fallback to dumping readable string
-        return json.dumps(result)
+        api_mode = 'pure_ollama' # We are standardizing on the pure Ollama template now
+        url = f"{base_url.rstrip('/')}/api/generate"
+        
+        model_name = settings.get('ollama_model_name', 'llava') # Default to a vision model
+        print(f"Using Ollama model: {model_name} in '{api_mode}' mode.")
+
+        instruction = f'Directly respond to the user prompt about the provided context and/or image: "{prompt}"'
+        if context: instruction = f'Given context: "{context}", respond to: "{prompt}"'
+        prompt_for_llm = f'{instruction}\n\nYou MUST expand the answer so it is actually useful to the user.Format your entire output as a single, raw JSON object with keys "label" and "fullText".'
+
+        payload = {"model": model_name, "prompt": prompt_for_llm, "stream": False, "format": "json"}
+        
+        # Add image data if present
+        if attachment_path:
+            base64_image = self._prepare_image_for_ollama(attachment_path)
+            if base64_image:
+                # LLaVA and other vision models expect the 'images' key
+                payload['images'] = [base64_image]
+
+        response = requests.post(url, json=payload, timeout=120) # Longer timeout for images
+        response.raise_for_status()
+        return json.loads(response.json()['response'])
+
+    def _get_ollama_chat(self, history: List, user_message: str, node_context: str, attachment_path: str = None) -> str:
+        settings = queries.get_settings_db(); base_url = settings.get('runpod_url')
+        if not base_url: raise ValueError("RunPod URL is not configured.")
+        url = f"{base_url.rstrip('/')}/api/generate"; model_name = settings.get('ollama_model_name', 'llava')
+        
+        final_prompt = f"System Context:\n{node_context}\n\n"
+        for h in history: final_prompt += f"{h['role']}: {h['parts'][0]}\n"
+        final_prompt += f"user: {user_message}\nassistant:"
+
+        payload = {"model": model_name, "prompt": final_prompt, "stream": False}
+
+        # --- THE FIX: Add the image to the payload ---
+        if attachment_path:
+            base64_image = self._prepare_image_for_ollama(attachment_path)
+            if base64_image:
+                payload['images'] = [base64_image]
+        
+        response = requests.post(url, json=payload, timeout=120)
+        response.raise_for_status()
+        return response.json()['response']
 
     # --- Full Gemini and public functions for safety ---
-    def _get_gemini_brainstorm(self, prompt: str, context: str = None) -> dict:
-        """
-        Gemini brainstorm keeps JSON structured format (Option B).
-        """
-        settings = queries.get_settings_db()
-        api_key = settings.get('gemini_api_key') or config.GOOGLE_API_KEY
-        if not api_key:
-            raise ValueError("Gemini API key is not configured in settings or .env file.")
+    def _get_gemini_brainstorm(self, prompt: str, context: str = None, attachment_path: str = None) -> dict:
+        settings = queries.get_settings_db(); api_key = settings.get('gemini_api_key') or config.GOOGLE_API_KEY
+        if not api_key: raise ValueError("Gemini API key is not configured.")
         genai.configure(api_key=api_key)
         
         model = genai.GenerativeModel('gemini-2.0-flash')
-        instruction = f'Directly respond to: "{prompt}"'
-        if context:
-            instruction = f'Given context: "{context}", take "{context}" as a starting point , think deep about the subject of context and related info to it and fields, respond to: "{prompt}"'
+        
+        content = []
+        # Put image first for better performance with vision models
+        if attachment_path:
+            try:
+                full_path = PROJECT_ROOT / "frontend" / attachment_path
+
+                img = Image.open(full_path)
+                content.append(img)
+            except Exception as e:
+                print(f"Error opening image for Gemini: {e}")
+
+        # Add the text prompt after the image
+        instruction = f'Directly respond to: "{prompt}"' if prompt else "Describe the attached image in detail."
+        if context: instruction = f'Given context: "{context}", respond to: "{prompt}"'
         structured_prompt = f'{instruction}\n\nFormat your output as a single JSON object with keys "label" and "fullText".'
-        
-        response = model.generate_content(structured_prompt)
-        
-        if not response.parts:
-            print("Gemini brainstorm response was blocked or empty.")
-            return {"label": "Response Blocked", "fullText": "The AI response was blocked by Gemini's safety filters."}
-        
-        # Defensive check for non-JSON response from Gemini
+        content.append(structured_prompt)
+
         try:
+            response = model.generate_content(content)
+            
+            if not response.parts:
+                print("Gemini response was blocked or empty.")
+                return {"label": "Response Blocked", "fullText": "The AI response was blocked by safety filters."}
+            
             cleaned_response_text = response.text.strip().replace('```json', '').replace('```', '')
             return json.loads(cleaned_response_text)
+
+        except google_exceptions.ResourceExhausted as e:
+            # --- THE FIX: Handle the rate limit error ---
+            print(f"Gemini Rate Limit Exceeded: {e}")
+            return {"label": "Rate Limit Error", "fullText": "Too many requests sent to the Gemini API. Please wait a minute and try again."}
         except json.JSONDecodeError:
-             print(f"Gemini brainstorm failed to return valid JSON. Raw text: {response.text}")
-             return {"label": "Formatting Error", "fullText": "The AI failed to return a response in the correct JSON format."}
+            print(f"Gemini failed to return valid JSON. Raw text: {response.text}")
+            return {"label": "Formatting Error", "fullText": f"AI failed to return valid JSON. Raw: '{response.text}'"}
+        except Exception as e:
+             # Handle other potential API errors
+            print(f"An unexpected Gemini API error occurred: {e}")
+            return {"label": "API Error", "fullText": f"An unexpected error occurred with the Gemini API: {str(e)}"}
     
-    def _get_gemini_chat(self, history: List, user_message: str, node_context: str) -> str:
+    def _get_gemini_chat(self, history: List[Dict], user_message: str, node_context: str, attachment_path: str = None) -> str:
+        print("we are initializing __get_gemini_chat func from llm_service.py")
         """
-        Fully corrected Gemini chat function using the same system instruction as Ollama chat.
-        This will ALWAYS answer the user directly and will not respond with "the context does not specify".
+        Gemini chat mode that persists an image context across multiple turns.
+        If an image was sent initially, it is automatically reattached for all later messages.
         """
         settings = queries.get_settings_db()
         api_key = settings.get('gemini_api_key') or config.GOOGLE_API_KEY
@@ -260,54 +299,71 @@ class LLMService:
 
         model = genai.GenerativeModel('gemini-2.0-flash')
 
-        # SYSTEM INSTRUCTION (identical policy as ollama fix)
-        system_instruction = self._build_chat_system_instruction(node_context and "do not limit to the info provided, think in all directions to the subject provided, no limits to answers")
+        # Keep a static chat object and persistent image cache
+        # so that the model remembers conversation history.
+        if not hasattr(self, "_gemini_chat_session"):
+            self._gemini_chat_session = model.start_chat(history=[])
+            self._gemini_image = None
 
-        # Build chat history for Gemini
-        gem_history = [{"role": "user", "parts": [system_instruction]}]
+        # If this is the first call or a new image was uploaded, store it.
+        if attachment_path:
+            try:
+                full_path = PROJECT_ROOT / "frontend" / attachment_path
+                print(f"🖼️ Loading Gemini image from: {full_path}")
 
-        # convert our history format to gemini format
-        for h in history:
-            r = h.get('role', 'user')
-            c = h.get('parts', [''])[0]
-            gem_history.append({"role": r, "parts": [c]})
+                img = Image.open(full_path)
+                self._gemini_image = img
+                print("✅ Stored new persistent image for Gemini chat session.")
+            except Exception as e:
+                print(f"⚠️ Error loading image for Gemini chat: {e}")
 
         try:
-            chat = model.start_chat(history=gem_history)
-            resp = chat.send_message(user_message)
-            if not resp.parts:
-                return "I’m sorry, I couldn’t generate a response."
-            return resp.text
+            # Build the multimodal message for this turn
+            content = [
+                f"Use the following as context for this conversation:\n{node_context}\n\n"
+            ]
+
+            # Always reattach the image if one was previously set
+            if getattr(self, "_gemini_image", None):
+                content.append(self._gemini_image)
+
+            # Finally, add the user's new question or statement
+            content.append(f"User message: {user_message}")
+
+            # Send it to the chat session
+            response = self._gemini_chat_session.send_message(content)
+
+            return response.text if response.parts else "I'm sorry, I could not generate a response."
+
         except Exception as e:
             print(f"Gemini chat error: {e}")
-            return f"Gemini error: {str(e)}"
+            return f"An error occurred with the Gemini API: {str(e)}"
 
-    def get_brainstorm_response(self, prompt: str, context: str = None) -> dict:
-        settings = queries.get_settings_db()
-        provider = settings.get('ai_provider', 'gemini')
         
-        if provider == 'runpod':
-            model_name = settings.get('ollama_model_name', 'llama3')
-            response_data = self._get_ollama_brainstorm(prompt, context)
-            return {"response": response_data, "model_name": model_name}
-        
-        # Default to Gemini
-        model_name = 'gemini-2.0-flash'
-        response_data = self._get_gemini_brainstorm(prompt, context)
-        return {"response": response_data, "model_name": model_name}
-
-    def get_chat_response(self, history: List, user_message: str, node_context: str) -> dict:
+    # --- PUBLIC SWITCHER FUNCTIONS ---
+    def get_brainstorm_response(self, prompt: str, context: str = None, attachment_path: str = None) -> dict:
         settings = queries.get_settings_db(); provider = settings.get('ai_provider', 'gemini')
         model_name_used = provider
-        
         if provider == 'runpod':
-            model_name_used = settings.get('ollama_model_name', 'llama3')
-            response_text = self._get_ollama_chat(history, user_message, node_context)
-            return {"response": response_text, "model_name": model_name_used}
-        
-        # Gemini provider
-        response_text = self._get_gemini_chat(history, user_message, node_context)
+            model_name_used = settings.get('ollama_model_name', 'llava')
+            response_data = self._get_ollama_brainstorm(prompt, context, attachment_path)
+            return {"response": response_data, "model_name": model_name_used}
         model_name_used = 'gemini-2.0-flash'
+        response_data = self._get_gemini_brainstorm(prompt, context, attachment_path)
+        return {"response": response_data, "model_name": model_name_used}
+
+    def get_chat_response(self, history: List, user_message: str, node_context: str, attachment_path: str = None) -> dict:
+        print("we are initializing get_chat_response func from llm_service.py")
+        settings = queries.get_settings_db(); provider = settings.get('ai_provider', 'gemini')
+        model_name_used = provider
+        if provider == 'runpod':
+            model_name_used = settings.get('ollama_model_name', 'llava')
+            response_text = self._get_ollama_chat(history, user_message, node_context, attachment_path)
+            return {"response": response_text, "model_name": model_name_used}
+        model_name_used = 'gemini-2.0-flash'
+        print(f"🔎 attachment_path received: {attachment_path!r}")
+        print(f"📜 node_context: {node_context[:100]}...") 
+        response_text = self._get_gemini_chat(history, user_message, node_context, attachment_path)
         return {"response": response_text, "model_name": model_name_used}
     
     

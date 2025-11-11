@@ -35,13 +35,20 @@ def create_new_idea_branch_db(source_node_id: str, user_prompt: str, ai_data: di
     con.close()
     return ai_node_id
 
-def extend_idea_branch_db(source_node_id: str, user_prompt: str, ai_data: dict, model_name: str):
+def create_new_idea_branch_db(source_node_id: str, user_prompt: str, ai_data: dict, model_name: str, attachment_path: str = None):
     con = get_db_connection()
     cur = con.cursor()
-    ai_node_id = f"node-ai-{uuid.uuid4()}"
+    # Save the attachment_path with the user's root node
     cur.execute(
-        "INSERT INTO nodes (id, label, fullText, is_ai_node, generated_by) VALUES (?, ?, ?, ?, ?)",
-        (ai_node_id, ai_data["label"], ai_data["fullText"], True, model_name)
+        "INSERT INTO nodes (id, label, fullText, is_ai_node, attachment_path) VALUES (?, ?, ?, ?, ?)",
+        (source_node_id, user_prompt, user_prompt, False, attachment_path)
+    )
+    ai_node_id = f"node-ai-{uuid.uuid4()}"
+    # --- THE FIX ---
+    # Also save the attachment_path with the DIRECT AI child node
+    cur.execute(
+        "INSERT INTO nodes (id, label, fullText, is_ai_node, generated_by, attachment_path) VALUES (?, ?, ?, ?, ?, ?)",
+        (ai_node_id, ai_data["label"], ai_data["fullText"], True, model_name, attachment_path)
     )
     cur.execute(
         "INSERT INTO edges (source_id, target_id, label) VALUES (?, ?, ?)",
@@ -71,6 +78,22 @@ def save_chat_message_db(node_id: str, role: str, content: str, model_name: str 
     )
     con.commit()
     con.close()
+
+def extend_idea_branch_db(source_node_id: str, user_prompt: str, ai_data: dict, model_name: str):
+    con = get_db_connection()
+    cur = con.cursor()
+    ai_node_id = f"node-ai-{uuid.uuid4()}"
+    cur.execute(
+        "INSERT INTO nodes (id, label, fullText, is_ai_node, generated_by) VALUES (?, ?, ?, ?, ?)",
+        (ai_node_id, ai_data["label"], ai_data["fullText"], True, model_name)
+    )
+    cur.execute(
+        "INSERT INTO edges (source_id, target_id, label) VALUES (?, ?, ?)",
+        (source_node_id, ai_node_id, user_prompt)
+    )
+    con.commit()
+    con.close()
+    return ai_node_id
 
 # --- UNCHANGED FUNCTIONS for copy-paste safety ---
 def get_settings_db():

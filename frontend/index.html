@@ -19,10 +19,25 @@
             id="prompt-input"
             placeholder="e.g., A gallery website that specializes in digital art..."
           ></textarea>
+
+          <!-- NEW: File Upload Section -->
+          <div class="file-upload-container">
+            <input
+              type="file"
+              id="file-input"
+              accept="image/*"
+              style="display: none"
+            />
+            <button id="attach-file-button" type="button">Attach Image</button>
+            <div id="file-preview-container" style="display: none">
+              <img id="file-preview-image" src="" alt="Image preview" />
+              <button id="remove-file-button" type="button">&times;</button>
+            </div>
+          </div>
+
           <button id="submit-button">Create Idea Node</button>
         </div>
         <div class="loader" id="loader" style="display: none"></div>
-
         <div id="settings-button" class="settings-icon">⚙️</div>
         <div id="active-model-display">Active AI: Loading...</div>
       </div>
@@ -104,6 +119,9 @@
         <div class="modal-main-area">
           <div class="modal-context-viewer">
             <h3>Original Idea Context</h3>
+            <div id="modal-attachment-container" style="display: none">
+              <img id="modal-attachment-image" src="" alt="Attached image" />
+            </div>
             <div id="modal-text-content"></div>
           </div>
           <div class="modal-chat-container">

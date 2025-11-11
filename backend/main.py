@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 
 from .database.connection import init_db
-from .routers import graph, chat, settings, ollama
+from .routers import graph, chat, settings, ollama, files
 
 load_dotenv()
 init_db()
@@ -25,6 +25,7 @@ app.include_router(graph.router)
 app.include_router(chat.router)
 app.include_router(settings.router)
 app.include_router(ollama.router)
+app.include_router(files.router)
 
 @app.get("/")
 def read_root():

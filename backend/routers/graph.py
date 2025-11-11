@@ -10,17 +10,41 @@ router = APIRouter(prefix="/api", tags=["graph"])
 
 @router.get("/graph")
 def get_graph():
-    # (This function is unchanged)
     nodes_res, edges_res = queries.get_full_graph_db()
+    
+    # --- THE FIX ---
+    # Create maps to easily look up nodes and attachments
+    nodes_map = {row['id']: dict(row) for row in nodes_res}
+    attachments_map = {row['id']: row['attachment_path'] for row in nodes_res if row['attachment_path']}
+    
+    # Propagate attachment path from source to target
+    for edge in edges_res:
+        source_id = edge['source_id']
+        target_id = edge['target_id']
+        # If the source node has an attachment and the target node is its direct child,
+        # give the target node the same attachment path for display purposes.
+        if source_id in attachments_map and target_id in nodes_map:
+            nodes_map[target_id]['attachment_path'] = attachments_map[source_id]
+    # --- END OF FIX ---
+            
     elements = []
-    for node_row in nodes_res:
-        node_data = { "id": node_row["id"], "label": node_row["label"], "fullText": node_row["fullText"], "status": node_row["status"] }
-        node_class = "ai-node" if node_row["is_ai_node"] else "user-node"
+    for node_id, node_data_map in nodes_map.items():
+        node_data = {
+            "id": node_data_map["id"],
+            "label": node_data_map["label"],
+            "fullText": node_data_map["fullText"],
+            "status": node_data_map["status"],
+            "generated_by": node_data_map["generated_by"],
+            "attachment_path": node_data_map["attachment_path"] # This is now correctly populated
+        }
+        node_class = "ai-node" if node_data_map["is_ai_node"] else "user-node"
         elements.append({"group": "nodes", "data": node_data, "classes": node_class})
+    
     for edge_row in edges_res:
         edge_label = edge_row['label'] if edge_row['label'] is not None else ""
         edge_data = { "id": f"edge-{edge_row['source_id']}-{edge_row['target_id']}", "source": edge_row['source_id'], "target": edge_row['target_id'], "label": edge_label }
         elements.append({"group": "edges", "data": edge_data})
+        
     return elements
 
 @router.put("/nodes/{node_id}/status")
@@ -42,16 +66,23 @@ def delete_node(node_id: str):
 @router.post("/brainstorm")
 async def brainstorm_idea(request: BrainstormRequest):
     try:
-        result = llm_service.get_brainstorm_response(request.prompt, request.parent_context)
+        # Pass attachment_path to the service
+        result = llm_service.get_brainstorm_response(
+            request.prompt, 
+            request.parent_context,
+            request.attachment_path
+        )
         ai_response_data = result["response"]
         model_name_used = result["model_name"]
-
+        
         source_node_id = request.source_node_id
         if request.parent_context and source_node_id:
+            # Child nodes don't get attachments
             ai_node_id = queries.extend_idea_branch_db(source_node_id, request.prompt, ai_response_data, model_name_used)
         else:
-            ai_node_id = queries.create_new_idea_branch_db(source_node_id, request.prompt, ai_response_data, model_name_used)
-            
+            # Pass attachment_path to the DB query for the new root node
+            ai_node_id = queries.create_new_idea_branch_db(source_node_id, request.prompt, ai_response_data, model_name_used, request.attachment_path)
+        
         return { "user_node_id": source_node_id, "ai_node": {"id": ai_node_id, "label": ai_response_data["label"], "fullText": ai_response_data["fullText"]},}
 
     except ValueError as e:
