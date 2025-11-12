@@ -153,6 +153,16 @@
         </div>
       </div>
     </div>
-    <script src="script.js"></script>
+    <!-- === NEW SCRIPT LOADING ORDER === -->
+    <!-- Load Services First -->
+    <script src="js/services/ApiService.js"></script>
+
+    <!-- Load Components -->
+    <script src="js/components/GraphManager.js"></script>
+    <script src="js/components/IdeaWorkspace.js"></script>
+    <script src="js/components/SettingsModal.js"></script>
+
+    <!-- Load the Main App Orchestrator Last -->
+    <script src="js/App.js"></script>
   </body>
 </html>
