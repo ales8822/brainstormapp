@@ -21,3 +21,12 @@ class ChatRequest(BaseModel):
     node_context: str = Field(..., alias="nodeContext")
     history: List[ChatMessage]
     user_message: str = Field(..., alias="userMessage")
+
+class GroupChatRequest(BaseModel):
+    node_id: str = Field(..., alias="nodeId")
+    node_context: str = Field(..., alias="nodeContext")
+    attachment_path: Optional[str] = Field(None, alias="attachmentPath")
+    history: List[ChatMessage]
+    user_message: str = Field(..., alias="userMessage")
+    participants: List[str] # The list of model names to query
+    target_model: Optional[str] = Field(None, alias="targetModel") 

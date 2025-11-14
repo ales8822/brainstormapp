@@ -17,10 +17,8 @@
           >
           <textarea
             id="prompt-input"
-            placeholder="e.g., A gallery website that specializes in digital art..."
+            placeholder="e.g., A gallery website..."
           ></textarea>
-
-          <!-- NEW: File Upload Section -->
           <div class="file-upload-container">
             <input
               type="file"
@@ -34,7 +32,6 @@
               <button id="remove-file-button" type="button">&times;</button>
             </div>
           </div>
-
           <button id="submit-button">Create Idea Node</button>
         </div>
         <div class="loader" id="loader" style="display: none"></div>
@@ -43,7 +40,6 @@
       </div>
       <div id="cy"></div>
     </div>
-
     <!-- === SETTINGS MODAL === -->
     <div id="settings-modal" class="modal-overlay" style="display: none">
       <div class="modal-content" style="max-width: 600px; height: auto">
@@ -108,12 +104,11 @@
       </div>
     </div>
 
-    <!-- === IDEA WORKSPACE MODAL === -->
+    <!-- === IDEA WORKSPACE MODAL (Correct and Unchanged) === -->
     <div id="idea-modal" class="modal-overlay" style="display: none">
       <div class="modal-content">
         <div class="modal-header">
           <h2 id="modal-title">Node Details</h2>
-          <!-- ADD THIS new element for node-level provenance -->
           <small id="modal-generated-by"></small>
         </div>
         <div class="modal-main-area">
@@ -125,7 +120,13 @@
             <div id="modal-text-content"></div>
           </div>
           <div class="modal-chat-container">
-            <h3>Discuss with AI</h3>
+            <div class="participant-header">
+              <h3>Discuss with AI</h3>
+              <div class="participant-list" id="participant-list"></div>
+              <button id="add-participant-button" class="add-participant-btn">
+                +
+              </button>
+            </div>
             <div id="chat-messages" class="chat-messages"></div>
             <form id="chat-form" class="chat-form">
               <input
@@ -153,16 +154,25 @@
         </div>
       </div>
     </div>
-    <!-- === NEW SCRIPT LOADING ORDER === -->
-    <!-- Load Services First -->
+
+    <!-- === NEW: Add Participant Popup Menu (Placed at end of body) === -->
+    <div
+      id="add-participant-menu"
+      class="participant-menu"
+      style="display: none"
+    >
+      <div id="participant-menu-list">
+        <!-- Checkboxes will be added here by JavaScript -->
+      </div>
+    </div>
+    <div id="mention-menu" class="participant-menu" style="display: none">
+      <!-- Mention suggestions will be added here by JavaScript -->
+    </div>
+    <!-- Script loading order is correct -->
     <script src="js/services/ApiService.js"></script>
-
-    <!-- Load Components -->
     <script src="js/components/GraphManager.js"></script>
-    <script src="js/components/IdeaWorkspace.js"></script>
     <script src="js/components/SettingsModal.js"></script>
-
-    <!-- Load the Main App Orchestrator Last -->
+    <script src="js/components/IdeaWorkspace.js"></script>
     <script src="js/App.js"></script>
   </body>
 </html>

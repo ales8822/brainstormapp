@@ -381,3 +381,100 @@ h3 {
 #refresh-models-button:hover {
   background-color: #5a6268;
 }
+
+/* --- ADD THESE NEW STYLES for the Participant UI --- */
+
+.participant-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.participant-header h3 {
+  margin: 0;
+  white-space: nowrap; /* Prevent "Discuss with AI" from wrapping */
+}
+
+.participant-list {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap; /* Allow participants to wrap to the next line */
+}
+
+.participant-tag {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background-color: #e9ecef;
+  border-radius: 15px;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: bold;
+  color: #495057;
+  transition: all 0.2s;
+}
+
+/* Status indicator styles */
+.participant-tag.thinking {
+  background-color: #6c757d;
+  color: white;
+}
+.participant-tag.responded {
+  background-color: #28a745;
+  color: white;
+}
+
+.remove-participant-btn {
+  font-size: 14px;
+  font-weight: bold;
+  cursor: pointer;
+  opacity: 0.5;
+  transition: opacity 0.2s;
+}
+.remove-participant-btn:hover {
+  opacity: 1;
+}
+
+.add-participant-btn {
+  padding: 0;
+  width: 28px;
+  height: 28px;
+  min-width: 28px;
+  font-size: 20px;
+  line-height: 1;
+  border-radius: 50%;
+  margin-left: auto; /* Push the '+' button to the far right */
+}
+
+.participant-menu {
+  position: absolute; /* We will position it with JavaScript */
+  background-color: white;
+  border: 1px solid #dfe6e9;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 1002; /* Above the modal overlay */
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+#participant-menu-list label {
+  display: block;
+  padding: 10px 15px;
+  cursor: pointer;
+  font-size: 14px;
+  white-space: nowrap;
+  border-bottom: 1px solid #f1f1f1;
+}
+
+#participant-menu-list label:last-child {
+  border-bottom: none;
+}
+
+#participant-menu-list label:hover {
+  background-color: #f8f9fa;
+}
+
+#participant-menu-list input[type="checkbox"] {
+  margin-right: 10px;
+}

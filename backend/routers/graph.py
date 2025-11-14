@@ -67,7 +67,7 @@ def delete_node(node_id: str):
 async def brainstorm_idea(request: BrainstormRequest):
     try:
         # Pass attachment_path to the service
-        result = llm_service.get_brainstorm_response(
+        result =await llm_service.get_brainstorm_response(
             request.prompt, 
             request.parent_context,
             request.attachment_path
