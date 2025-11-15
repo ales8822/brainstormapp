@@ -17,3 +17,4 @@ def update_settings(settings: Dict[str, str]):
     # Basic validation could be added here
     queries.update_settings_db(settings)
     return {"status": "success", "settings": settings}
+

@@ -46,7 +46,7 @@ Follow these steps to get the application running on your local machine.
     ```bash
     git clone <your-repository-url>
     cd brainstorming_app
-    
+
 2. Set Up the Backend
     The backend runs the API server and connects to the database and AI services.
     code
@@ -103,3 +103,79 @@ Follow these steps to get the application running on your local machine.
     Click the "Refresh" button (🔄) to fetch the list of available models you have pulled.
     Select a default model from the dropdown.
     Click "Save Settings".
+
+
+
+    Project Summary & Current Stage
+    Project Name: AI Brainstorming Canvas
+    Core Concept: A full-stack, Python-driven web application that transforms brainstorming from a static activity into a dynamic, AI-powered visual journey. It allows users to develop ideas on an interactive graph, with each idea being a self-contained workspace for in-depth, multi-agent AI conversations.
+    Current Stage (Stable Version - Pre-Refactor): The application is feature-complete with its core "single canvas, modal-based" architecture. All major functionalities are implemented, tested, and working.
+    Key Working Features:
+    Visual & Multimodal Brainstorming:
+    Users can create new "idea nodes" on a single, persistent canvas.
+    Ideas can be initiated with text or by uploading an image, which the AI analyzes to create the initial node content.
+    Nodes are shaped differently to distinguish between user-input ideas (rectangles) and AI-generated responses (circles).
+    Edges connecting nodes are labeled with the prompt that generated the new idea, creating a clear visual story of the thought process.
+    The "Idea Workspace" (Modal):
+    Clicking any node opens a detailed modal view.
+    This modal displays the node's full text content and its associated image (if any).
+    It contains a fully persistent, database-backed chat interface.
+    AI Roundtable (Group Chat):
+    The chat is a multi-agent system. Users can add multiple AI models (e.g., Gemini and several Ollama models) as participants in a single conversation.
+    The backend orchestrates parallel, streaming API calls, and responses appear in the chat as they arrive.
+    Directed Messaging (@mentions):
+    Users can target a specific AI participant in the group chat by typing @model-name, allowing for direct questions and moderated discussions.
+    Full Persistence & Provenance:
+    The entire graph (nodes and edges), along with every chat message, is saved to a local SQLite database.
+    The application tracks and displays which specific AI model generated each node and each chat message, providing a permanent record.
+    Flexible AI Provider System:
+    A comprehensive "Settings" panel allows users to switch between Google Gemini and a custom Ollama endpoint (e.g., RunPod).
+    Users can securely manage their API keys and endpoint URLs.
+    The app can dynamically query a configured Ollama endpoint to fetch and display a list of available models, preventing user error.
+
+brainstorming_app/
+├── .env                  # Stores secret keys (e.g., GOOGLE_API_KEY) - Ignored by Git
+├── .gitignore            # Specifies files and folders for Git to ignore
+├── README.md             # Project documentation
+├── run.py                # The stable Python script to run the backend server
+│
+├── backend/
+│   ├── __init__.py
+│   ├── config.py           # Handles loading and providing environment variables
+│   ├── main.py             # The main FastAPI app assembler
+│   ├── schemas.py          # Contains all Pydantic data models for API requests
+│   │
+│   ├── database/
+│   │   ├── __init__.py
+│   │   ├── connection.py   # Manages the SQLite database connection and initialization
+│   │   └── queries.py      # Contains all SQL query functions
+│   │
+│   ├── routers/
+│   │   ├── __init__.py
+│   │   ├── chat.py         # Defines the /api/chat and /api/group-chat endpoints
+│   │   ├── files.py        # Defines the /api/upload endpoint for images
+│   │   ├── graph.py        # Defines endpoints for nodes and the graph
+│   │   ├── ollama.py       # Defines the endpoint to fetch Ollama models
+│   │   └── settings.py     # Defines endpoints for getting/setting app configuration
+│   │
+│   ├── services/
+│   │   ├── __init__.py
+│   │   └── llm_service.py  # The "brain": contains all logic for calling AI providers
+│   │
+│   ├── requirements.txt    # List of Python dependencies
+│   ├── brainstorm.db       # The SQLite database file - Ignored by Git
+│   └── venv/               # The Python virtual environment - Ignored by Git
+│
+└── frontend/
+    ├── js/
+    │   ├── services/
+    │   │   └── ApiService.js   # Centralizes all frontend 'fetch' calls
+    │   ├── components/
+    │   │   ├── GraphManager.js   # Manages the Cytoscape canvas
+    │   │   ├── IdeaWorkspace.js  # Manages the main "chat" modal
+    │   │   └── SettingsModal.js  # Manages the settings modal
+    │   └── App.js              # The central frontend orchestrator class
+    │
+    ├── uploads/              # Where uploaded images are stored - Ignored by Git
+    ├── index.html            # The main HTML file
+    └── style.css             # The main stylesheet
