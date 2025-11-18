@@ -38,7 +38,7 @@ class App {
       let availableModels = [];
 
       if (settingsData.gemini_api_key) {
-        availableModels.push("gemini-1.5-flash-latest");
+        availableModels.push("gemini-2.0-flash");
       }
       if (settingsData.runpod_url && settingsData.runpod_url.trim() !== "") {
         try {

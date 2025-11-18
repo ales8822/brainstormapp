@@ -1,13 +1,22 @@
 # backend/config.py
 
-from dotenv import load_dotenv
 import os
+from dotenv import load_dotenv
+from pathlib import Path
 
-# Load the .env file from the root project directory
-# The find_dotenv() function will automatically search upwards for the .env file
-from dotenv import find_dotenv
-load_dotenv(find_dotenv())
+load_dotenv()
 
-# Load all the environment variables into Python constants
+# --- PATHS ---
+# This is the single source of truth for the project root directory.
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+
+# This is the single source of truth for the upload directory.
+UPLOAD_DIR = PROJECT_ROOT / "frontend" / "uploads"
+
+# --- DATABASE ---
+# This is the single source of truth for the database file path.
+DB_FILE = PROJECT_ROOT / "brainstorm.db"
+
+
+# --- API KEYS ---
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
-RUNPOD_LLM_URL = os.getenv("RUNPOD_LLM_URL") 

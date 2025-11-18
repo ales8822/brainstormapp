@@ -1,20 +1,30 @@
-# backend/routers/settings.py
+# backend/routers/settings.py (FULLY CORRECTED)
 
-from fastapi import APIRouter
-from ..database import queries
-from typing import Dict
+from fastapi import APIRouter, Depends
+from typing import Dict, Any
+
+# Import the service and its dependencies
+from ..services.settings_service import SettingsService
+from ..dependencies import get_settings_service
 
 router = APIRouter()
 
+# --- FIX 1: Add 'async' and 'await' ---
 @router.get("/api/settings")
-def get_settings():
+async def get_settings( # <--- Add async
+    settings_service: SettingsService = Depends(get_settings_service)
+):
     """Fetches the current application settings."""
-    return queries.get_settings_db()
+    # The service method is now a coroutine, so we must await it
+    return await settings_service.get_all_settings() # <--- Add await
 
+# --- FIX 2: Add 'async' and 'await' ---
 @router.post("/api/settings")
-def update_settings(settings: Dict[str, str]):
+async def update_settings( # <--- Add async
+    settings: Dict[str, Any],
+    settings_service: SettingsService = Depends(get_settings_service)
+):
     """Updates the application settings."""
-    # Basic validation could be added here
-    queries.update_settings_db(settings)
+    # The service method is now a coroutine, so we must await it
+    await settings_service.update_settings(settings) # <--- Add await
     return {"status": "success", "settings": settings}
-

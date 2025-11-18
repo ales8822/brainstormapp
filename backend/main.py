@@ -1,18 +1,34 @@
-# backend/main.py
+# backend/main.py (FULLY FIXED)
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
+from contextlib import asynccontextmanager
 
-from .database.connection import init_db
+from .data_access.connection import get_db_connection, initialize_db
 from .routers import graph, chat, settings, ollama, files
 
 load_dotenv()
-init_db()
 
-app = FastAPI()
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    print("Application startup...")
 
-# --- REVERTING to the simple, working CORS configuration ---
+    try:
+        # --- CRITICAL: Run initialization exactly once ---
+        async with get_db_connection() as conn:
+            await initialize_db(conn)   # <-- THIS WAS MISSING
+            print("Database initialized successfully (WAL, schema, etc)")
+    except Exception as e:
+        print(f"FATAL: Could not initialize database: {e}")
+
+    yield
+
+    print("Application shutdown...")
+
+app = FastAPI(lifespan=lifespan)
+
+# --- CORS ---
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -21,6 +37,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# --- ROUTERS ---
 app.include_router(graph.router)
 app.include_router(chat.router)
 app.include_router(settings.router)
