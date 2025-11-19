@@ -36,6 +36,10 @@ class App {
     );
     this.edgeModeIndicator = document.getElementById("edge-mode-indicator");
 
+    // --- ADD DOM REFS FOR INSPECTOR ---
+    this.inspectorPanel = document.getElementById("workspace-inspector-panel");
+    this.inspectorContent = document.getElementById("inspector-content");
+
     this.activeWorkspaceNode = null;
     this.chatHistory = [];
     this.attachedFilePath = null;
@@ -144,7 +148,9 @@ class App {
     this.chatHistory = [];
     this.breadcrumbIdeaName.textContent = node.data("label");
     this.workspaceChatMessages.innerHTML = "";
-
+    this.handleWorkspaceCanvasClick();
+    this.workspaceGraph.rerunLayout();
+    this.setupWorkspaceEventListeners();
     this.workspaceGraph.clear();
     window.location.hash = `#/workspace/${node.id()}`;
 
@@ -564,7 +570,7 @@ class App {
       console.error("Cannot promote node, no active workspace.");
       return;
     }
-    console.log("Promoting message to node:", messageText);
+    // console.log("Promoting message to node:", messageText);
 
     try {
       const payload = {
@@ -671,10 +677,13 @@ class App {
   }
 
   handleWorkspaceNodeClick(node) {
-    // Only log if not in edge drawing mode
+    // Only handle if not in edge drawing mode
     if (!this.edgeDrawSource) {
       console.log("Workspace node clicked:", node.data("label"));
-      // Future: Open node details panel, etc.
+
+      // --- NEW LOGIC: POPULATE AND SHOW INSPECTOR ---
+      this.inspectorContent.textContent = node.data("fullText");
+      this.inspectorPanel.classList.add("visible");
     }
   }
 
@@ -698,7 +707,8 @@ class App {
       this.workspaceGraph.removeClassFromAllNodes("edge-source-selected");
       this.edgeDrawSource = null;
     }
-
+    this.inspectorContent.innerHTML = `<p class="inspector-placeholder">Click a node to see its full content.</p>`;
+    this.inspectorPanel.classList.remove("visible");
     // Always reset cursor and indicator
     document.body.style.cursor = "default";
     if (this.edgeModeIndicator) {
