@@ -195,34 +195,66 @@ class App {
       const selected = this.workspaceGraph.cy.$(":selected");
       if (selected.length === 0) return;
 
-      // We only handle edge deletion for now
-      const selectedEdge = selected.filter("edge");
-      if (selectedEdge.length > 0) {
-        event.preventDefault(); // Prevent browser back navigation on backspace
+      event.preventDefault(); // Prevent browser back navigation
 
+      const selectedEdge = selected.filter("edge");
+      const selectedNode = selected.filter("node");
+
+      if (selectedEdge.length > 0) {
         const edge = selectedEdge.first();
         const sourceId = edge.source().id();
         const targetId = edge.target().id();
+        const edgeId = edge.id();
 
         console.log(`Attempting to delete edge: ${sourceId} -> ${targetId}`);
 
         try {
-          // Visually remove immediately for responsiveness
           edge.remove();
-
-          // Call API to delete from database
           await this.api.deleteEdge({ source: sourceId, target: targetId });
           console.log("Edge deleted successfully from database.");
         } catch (error) {
           console.error("Failed to delete edge:", error);
-          // Optional: add the edge back if the API call fails
           this.workspaceGraph.addEdge({
             source: sourceId,
             target: targetId,
-            id: edge.id(),
+            id: edgeId,
           });
           alert("Failed to delete connection.");
         }
+      } else if (selectedNode.length > 0) {
+        // --- NEW LOGIC FOR NODE DELETION ---
+        const node = selectedNode.first();
+        const nodeId = node.id();
+
+        // Add a confirmation dialog
+        if (
+          !confirm(
+            `Are you sure you want to delete the node "${node.data(
+              "label"
+            )}"? This cannot be undone.`
+          )
+        ) {
+          return;
+        }
+
+        console.log(`Attempting to delete node: ${nodeId}`);
+
+        try {
+          // Visually remove the node and its connected edges immediately
+          node.remove();
+
+          // Call the existing API to delete from the database
+          await this.api.deleteNode(nodeId);
+          console.log("Node deleted successfully from the database.");
+        } catch (error) {
+          console.error("Failed to delete node:", error);
+          // Re-loading the workspace is the safest way to restore state on failure
+          alert(
+            "Failed to delete the node from the database. The workspace will now reload to ensure consistency."
+          );
+          this.enterWorkspace(this.activeWorkspaceNode);
+        }
+        // --- END OF NEW LOGIC ---
       }
     }
   }
