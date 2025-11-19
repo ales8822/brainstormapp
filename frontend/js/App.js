@@ -135,6 +135,7 @@ class App {
       this.resetFileUpload()
     );
     this.fileInput.addEventListener("change", (e) => this.handleFileUpload(e));
+    document.addEventListener("keydown", (e) => this.handleKeyDown(e));
   }
 
   async enterWorkspace(node) {
@@ -178,6 +179,52 @@ class App {
     window.location.hash = "";
     this.workspaceView.style.display = "none";
     this.overviewView.style.display = "flex";
+  }
+
+  async handleKeyDown(event) {
+    // Only act if we are inside a workspace and not typing in an input
+    if (
+      !this.activeWorkspaceNode ||
+      event.target.tagName === "INPUT" ||
+      event.target.tagName === "TEXTAREA"
+    ) {
+      return;
+    }
+
+    if (event.key === "Delete" || event.key === "Backspace") {
+      const selected = this.workspaceGraph.cy.$(":selected");
+      if (selected.length === 0) return;
+
+      // We only handle edge deletion for now
+      const selectedEdge = selected.filter("edge");
+      if (selectedEdge.length > 0) {
+        event.preventDefault(); // Prevent browser back navigation on backspace
+
+        const edge = selectedEdge.first();
+        const sourceId = edge.source().id();
+        const targetId = edge.target().id();
+
+        console.log(`Attempting to delete edge: ${sourceId} -> ${targetId}`);
+
+        try {
+          // Visually remove immediately for responsiveness
+          edge.remove();
+
+          // Call API to delete from database
+          await this.api.deleteEdge({ source: sourceId, target: targetId });
+          console.log("Edge deleted successfully from database.");
+        } catch (error) {
+          console.error("Failed to delete edge:", error);
+          // Optional: add the edge back if the API call fails
+          this.workspaceGraph.addEdge({
+            source: sourceId,
+            target: targetId,
+            id: edge.id(),
+          });
+          alert("Failed to delete connection.");
+        }
+      }
+    }
   }
 
   setupWorkspaceEventListeners() {

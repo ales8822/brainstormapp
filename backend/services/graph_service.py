@@ -4,7 +4,7 @@ from typing import List, Dict, Tuple
 import uuid
 
 from ..repositories.graph_repository import GraphRepository
-from ..schemas import BrainstormRequest, SimpleNodeRequest,PromoteNodeRequest, CreateEdgeRequest
+from ..schemas import BrainstormRequest, SimpleNodeRequest,PromoteNodeRequest, CreateEdgeRequest, DeleteEdgeRequest
 from .llm_service import LLMService
 
 class GraphService:
@@ -130,3 +130,7 @@ class GraphService:
     async def create_edge(self, request: CreateEdgeRequest) -> None:
         """Orchestrates creating a new edge."""
         await self.graph_repo.create_edge(request.source, request.target, request.label)
+
+    async def delete_edge(self, request: DeleteEdgeRequest) -> None:
+        """Orchestrates deleting an edge."""
+        await self.graph_repo.delete_edge(request.source, request.target)

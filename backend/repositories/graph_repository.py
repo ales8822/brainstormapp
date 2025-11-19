@@ -144,3 +144,13 @@ class GraphRepository:
             async with db.execute(query, (workspace_id, workspace_id)) as cursor:
                 edges_res = await cursor.fetchall()
         return [dict(row) for row in edges_res]
+    
+    async def delete_edge(self, source: str, target: str):
+        """Deletes a specific edge from the database."""
+        async with self.write_lock:
+            async with aiosqlite.connect(self.db_path) as db:
+                await db.execute(
+                    "DELETE FROM edges WHERE source_id = ? AND target_id = ?",
+                    (source, target)
+                )
+                await db.commit()

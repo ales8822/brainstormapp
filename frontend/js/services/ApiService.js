@@ -86,6 +86,15 @@ class ApiService {
     });
   }
 
+  deleteEdge(payload) {
+    // payload should be { source, target }
+    return this._fetch("/graph/edges", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+  }
+
   uploadFile(formData) {
     // Note: _fetch is not used here because FormData sets its own headers
     console.log("ApiService: Uploading file...");

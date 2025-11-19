@@ -1,6 +1,6 @@
 # backend/routers/graph.py
 from fastapi import APIRouter, HTTPException, Depends
-from ..schemas import BrainstormRequest, StatusUpdateRequest, SimpleNodeRequest, PromoteNodeRequest, CreateEdgeRequest
+from ..schemas import BrainstormRequest, StatusUpdateRequest, SimpleNodeRequest, PromoteNodeRequest, CreateEdgeRequest, DeleteEdgeRequest
 # Import the service and its dependencies
 from ..services.graph_service import GraphService
 from ..dependencies import get_graph_service
@@ -192,3 +192,15 @@ async def create_edge(
         return {"status": "success", "source": request.source, "target": request.target}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to create edge: {e}")
+    
+@router.delete("/graph/edges", status_code=200)
+async def delete_edge(
+    request: DeleteEdgeRequest,
+    graph_service: GraphService = Depends(get_graph_service)
+):
+    """Deletes an edge between two nodes."""
+    try:
+        await graph_service.delete_edge(request)
+        return {"status": "success", "source": request.source, "target": request.target}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to delete edge: {e}")

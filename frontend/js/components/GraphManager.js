@@ -8,7 +8,7 @@ class GraphManager {
     this.cy = cytoscape({
       container: document.getElementById(containerId),
       boxSelectionEnabled: false,
-      autounselectify: true,
+      // autounselectify: true,
       style: [
         // This style array is correct and unchanged
         {
@@ -62,6 +62,14 @@ class GraphManager {
             "target-arrow-color": "#bdc3c7",
             "target-arrow-shape": "triangle",
             "curve-style": "bezier",
+          },
+        },
+        {
+          selector: "edge:selected",
+          style: {
+            width: 5, // Make it thicker
+            "line-color": "#f1c40f", // Use the same yellow as node selection
+            "target-arrow-color": "#f1c40f",
           },
         },
         {

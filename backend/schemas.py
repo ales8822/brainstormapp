@@ -46,3 +46,7 @@ class CreateEdgeRequest(BaseModel):
     source: str
     target: str
     label: Optional[str] = None
+
+class DeleteEdgeRequest(BaseModel):
+    source: str
+    target: str
