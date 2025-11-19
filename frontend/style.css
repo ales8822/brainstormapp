@@ -645,3 +645,22 @@ h3 {
   text-align: center;
   margin-top: 40px;
 }
+
+/* --- ADD THIS NEW RULE --- */
+#inspector-status-controls {
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid #dfe6e9;
+  flex-shrink: 0;
+}
+
+.inspector-status-display {
+  margin-bottom: 15px;
+  font-size: 14px;
+  color: #6c757d;
+}
+
+.inspector-status-display span {
+  font-weight: bold;
+  color: #34495e;
+}

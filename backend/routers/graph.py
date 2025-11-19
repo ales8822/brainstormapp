@@ -68,7 +68,11 @@ async def get_workspace_elements(
             "attachment_path": node_data_map["attachment_path"],
             "workspace_id": node_data_map["workspace_id"]
         }
+         # --- FIX: Add the status class here ---
         node_class = "ai-node" if node_data_map["is_ai_node"] else "user-node"
+        if node_data_map.get("status"):
+            node_class += f' status-{node_data_map["status"]}'
+        
         elements.append({"group": "nodes", "data": node_data, "classes": node_class})
         
     # Format edges

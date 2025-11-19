@@ -39,11 +39,16 @@ class App {
     // --- ADD DOM REFS FOR INSPECTOR ---
     this.inspectorPanel = document.getElementById("workspace-inspector-panel");
     this.inspectorContent = document.getElementById("inspector-content");
-
+    this.inspectorStatusDisplay = document.getElementById(
+      "inspector-status-display"
+    );
+    this.inspectorStatusControls = document.getElementById(
+      "inspector-status-controls"
+    );
     this.activeWorkspaceNode = null;
     this.chatHistory = [];
     this.attachedFilePath = null;
-
+    this.inspectedNode = null;
     this._bindUIEventListeners();
     this.workspaceEventListenersSetup = false;
     this.workspaceButtonListenerSetup = false;
@@ -112,9 +117,10 @@ class App {
 
   _bindComponentEvents() {
     this.graph.onNodeDoubleClick((node) => this.enterWorkspace(node));
-    this.workspaceGraph.onNodeClick((node) =>
-      this.handleWorkspaceNodeClick(node)
-    );
+    // this.workspaceGraph.onNodeClick((node) =>
+    //   this.handleWorkspaceNodeClick(node)
+    // );
+
     this.workspaceGraph.onCanvasClick(() => this.handleWorkspaceCanvasClick());
     this.workspace.onNodeDeletedCallback = () => this.graph.loadGraph();
     this.settings.onSettingsChangedCallback = () => this.onSettingsChanged();
@@ -140,6 +146,17 @@ class App {
     );
     this.fileInput.addEventListener("change", (e) => this.handleFileUpload(e));
     document.addEventListener("keydown", (e) => this.handleKeyDown(e));
+    this.inspectorStatusControls.addEventListener("click", (e) => {
+      console.log(
+        "Inspector status area was clicked. Clicked element:",
+        e.target
+      );
+      if (e.target.matches(".status-btn")) {
+        this.handleInspectorStatusChange(e.target.dataset.status);
+      } else {
+        console.log("Clicked element did NOT match '.status-btn'");
+      }
+    });
   }
 
   async enterWorkspace(node) {
@@ -181,6 +198,7 @@ class App {
     console.log("Exiting workspace back to overview.");
     this.activeWorkspaceNode = null;
     this.edgeDrawSource = null; // Clear edge drawing state
+    this.inspectedNode = null;
     document.body.style.cursor = "default"; // Reset cursor
     window.location.hash = "";
     this.workspaceView.style.display = "none";
@@ -286,70 +304,54 @@ class App {
       cy.on("tap", "node", (event) => {
         const targetNode = event.target;
 
-        // If we're in edge drawing mode, complete the edge
+        // CASE 1: We are in edge-drawing mode.
         if (this.edgeDrawSource) {
           const sourceId = this.edgeDrawSource.id();
           const targetId = targetNode.id();
 
+          // If user clicks the same node, cancel the draw.
           if (sourceId === targetId) {
-            // Clicked same node, cancel edge drawing
-            this.workspaceGraph.removeClassFromAllNodes("edge-source-selected");
-            this.edgeDrawSource = null;
-            document.body.style.cursor = "default";
-            if (this.edgeModeIndicator) {
-              this.edgeModeIndicator.style.display = "none";
-            }
+            this.handleWorkspaceCanvasClick(); // Reuse cancel logic
             return;
           }
 
-          // Check if edge already exists
+          // Complete the edge draw
           const edgeId = `edge-${sourceId}-${targetId}`;
-          const existingEdge = cy.getElementById(edgeId);
-
-          if (existingEdge.length === 0) {
-            console.log(`Creating edge from ${sourceId} to ${targetId}`);
-
-            // --- MODIFICATION: Call API to save the edge ---
-            const edgeData = { id: edgeId, source: sourceId, target: targetId };
-            this.workspaceGraph.addEdge(edgeData);
-
-            // Call the API in the background, don't wait for it
+          if (cy.getElementById(edgeId).length === 0) {
+            this.workspaceGraph.addEdge({
+              id: edgeId,
+              source: sourceId,
+              target: targetId,
+            });
             this.api
               .createEdge({ source: sourceId, target: targetId })
-              .then(() =>
-                console.log(
-                  `Edge ${sourceId} -> ${targetId} saved successfully.`
-                )
-              )
+              .then(() => console.log(`Edge saved: ${sourceId} -> ${targetId}`))
               .catch((err) => {
                 console.error("Failed to save edge:", err);
-                // Optionally, remove the edge visually if saving fails
                 this.workspaceGraph.removeNodeById(edgeId);
-                alert("Failed to save the connection.");
+                alert("Failed to save connection.");
               });
-            // --- END MODIFICATION ---
-          } else {
-            console.log(
-              `Edge already exists between ${sourceId} and ${targetId}`
-            );
           }
 
-          this.workspaceGraph.removeClassFromAllNodes("edge-source-selected");
-          this.edgeDrawSource = null;
-          document.body.style.cursor = "default";
-          if (this.edgeModeIndicator) {
-            this.edgeModeIndicator.style.display = "none";
-          }
-
-          // Don't trigger node click handler when completing an edge
-          return;
+          this.handleWorkspaceCanvasClick(); // Reuse cancel logic to reset state
+          return; // IMPORTANT: Stop execution here
         }
 
-        // Otherwise, handle as normal node click
-        this.handleWorkspaceNodeClick(targetNode);
-      });
+        // CASE 2: We are NOT in edge-drawing mode. This is a normal node click.
+        console.log("Node selected for inspector:", targetNode.data("label"));
+        this.inspectedNode = targetNode;
+        this.inspectorContent.textContent = targetNode.data("fullText");
 
-      // Mark that we've set up the basic listeners
+        // --- NEW LOGIC ---
+        this.inspectorStatusDisplay.querySelector("span").textContent =
+          targetNode.data("status");
+        this.inspectorStatusDisplay.style.display = "block"; // Make sure it's visible
+
+        this.inspectorPanel.classList.add("visible");
+        this.updateInspectorStatusButtons(targetNode.data("status"));
+      });
+      // --- END OF REPLACEMENT BLOCK ---
+
       this.workspaceEventListenersSetup = true;
     }
 
@@ -676,22 +678,15 @@ class App {
     }
   }
 
-  handleWorkspaceNodeClick(node) {
-    // Only handle if not in edge drawing mode
-    if (!this.edgeDrawSource) {
-      console.log("Workspace node clicked:", node.data("label"));
-
-      // --- NEW LOGIC: POPULATE AND SHOW INSPECTOR ---
-      this.inspectorContent.textContent = node.data("fullText");
-      this.inspectorPanel.classList.add("visible");
-    }
-  }
-
   handleWorkspaceCanvasClick() {
     console.log(
       "Workspace canvas clicked - cleaning up tooltips and edge mode"
     );
-
+    // Hide Inspector
+    this.inspectorContent.innerHTML = `<p class="inspector-placeholder">Click a node to see its full content.</p>`;
+    this.inspectorPanel.classList.remove("visible");
+    this.inspectedNode = null; // Clear the inspected node
+    this.inspectorStatusDisplay.style.display = "none"; // Hide the status
     // Force hide all tooltips
     const cy = this.workspaceGraph.cy;
     cy.nodes().forEach((node) => {
@@ -709,11 +704,51 @@ class App {
     }
     this.inspectorContent.innerHTML = `<p class="inspector-placeholder">Click a node to see its full content.</p>`;
     this.inspectorPanel.classList.remove("visible");
+    this.inspectedNode = null; // Clear the inspected node
     // Always reset cursor and indicator
     document.body.style.cursor = "default";
     if (this.edgeModeIndicator) {
       this.edgeModeIndicator.style.display = "none";
     }
+  }
+
+  // --- ADD THIS NEW HANDLER ---
+  async handleInspectorStatusChange(newStatus) {
+    if (!this.inspectedNode) return;
+
+    const nodeId = this.inspectedNode.id();
+    const oldStatus = this.inspectedNode.data("status");
+    console.log(
+      `Updating status for node ${nodeId} from ${oldStatus} to ${newStatus}`
+    );
+
+    try {
+      // API call
+      await this.api.updateNodeStatus(nodeId, newStatus);
+
+      // Update UI
+      this.inspectedNode.data("status", newStatus);
+      this.inspectedNode.removeClass(`status-${oldStatus}`);
+      this.inspectedNode.addClass(`status-${newStatus}`);
+      this.updateInspectorStatusButtons(newStatus);
+      this.inspectorStatusDisplay.querySelector("span").textContent = newStatus;
+    } catch (error) {
+      console.error("Failed to update node status:", error);
+      alert("Could not save the new status.");
+    }
+  }
+
+  // --- ADD THIS NEW HELPER METHOD ---
+  updateInspectorStatusButtons(currentStatus) {
+    const buttons =
+      this.inspectorStatusControls.querySelectorAll(".status-btn");
+    buttons.forEach((btn) => {
+      if (btn.dataset.status === currentStatus) {
+        btn.classList.add("active");
+      } else {
+        btn.classList.remove("active");
+      }
+    });
   }
 }
 
