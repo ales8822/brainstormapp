@@ -1,15 +1,16 @@
 // frontend/js/components/GraphManager.js
-// This file will contain all the logic for initializing Cytoscape, loading graph data, and handling node clicks.
 
 class GraphManager {
   constructor(containerId, apiService) {
     console.log("GraphManager: Initializing...");
     this.api = apiService;
-    const attachmentIcon = "📄";
 
     this.cy = cytoscape({
       container: document.getElementById(containerId),
+      boxSelectionEnabled: false,
+      autounselectify: true,
       style: [
+        // This style array is correct and unchanged
         {
           selector: "node",
           style: {
@@ -23,16 +24,19 @@ class GraphManager {
             color: "#fff",
             "font-size": "14px",
             "font-weight": "bold",
-            "transition-property": "background-color, shape",
-            "transition-duration": "0.3s",
           },
         },
         {
           selector: ":selected",
+          style: { "border-color": "#f1c40f", "border-width": 5 },
+        },
+        {
+          selector: ".edge-source-selected",
           style: {
-            "border-color": "#f1c40f",
-            "border-width": 5,
-            "border-style": "solid",
+            // --- FIX: Cytoscape does not support box-shadow. This creates a glow. ---
+            "border-width": "10px",
+            "border-color": "#27ae60",
+            "border-opacity": 0.5,
           },
         },
         { selector: ".user-node", style: { shape: "round-rectangle" } },
@@ -66,16 +70,11 @@ class GraphManager {
             label: "data(label)",
             "font-size": "10px",
             color: "#34495e",
-            "text-rotation": "autorotate",
-            "text-background-color": "#ecf0f1",
-            "text-background-opacity": 1,
-            "text-background-padding": "3px",
           },
         },
         {
           selector: ".has-attachment",
           style: {
-            // Add a border to visually indicate an attachment
             "border-color": "#ffffff",
             "border-width": 4,
             "border-style": "double",
@@ -84,15 +83,67 @@ class GraphManager {
       ],
       elements: [],
     });
+
+    // Your check is good, let's keep it.
+    if (typeof this.cy.nodeHtmlLabel === "function") {
+      this.cy.nodeHtmlLabel([
+        {
+          query: "node",
+          halign: "center",
+          valign: "top",
+          halignBox: "center",
+          valignBox: "top",
+          tpl: (data) =>
+            `<div class="edge-connector-button" data-node-id="${data.id}">+</div>`,
+        },
+      ]);
+    }
+
+    // Manually handle hover effects for the HTML label
+    this.cy.on("mouseover", "node", (event) => {
+      const node = event.target;
+      const el = document.querySelector(
+        `.cy-node-html-label[data-cy-id="${node.id()}"]`
+      );
+      if (el) el.classList.add("cy-node-html-label-hover");
+    });
+
+    this.cy.on("mouseout", "node", (event) => {
+      const node = event.target;
+      const el = document.querySelector(
+        `.cy-node-html-label[data-cy-id="${node.id()}"]`
+      );
+      if (el) el.classList.remove("cy-node-html-label-hover");
+    });
+
     console.log("GraphManager: Cytoscape instance created.");
   }
 
+  initLabels() {
+    if (typeof this.cy.nodeHtmlLabel === "function") {
+      console.log("GraphManager: Initializing HTML labels.");
+      this.cy.nodeHtmlLabel([
+        {
+          query: "node",
+          halign: "center",
+          valign: "top",
+          halignBox: "center",
+          valignBox: "top",
+          tpl: (data) =>
+            `<div class="edge-connector-button" data-node-id="${data.id}">+</div>`,
+        },
+      ]);
+    } else {
+      console.warn(
+        "GraphManager: nodeHtmlLabel function not found on instance, cannot init labels."
+      );
+    }
+  }
   async loadGraph() {
     console.log("GraphManager: Loading graph data from API...");
     try {
       const elementsFromServer = await this.api.getGraph();
       this.cy.elements().remove();
-
       const processedElements = elementsFromServer.map((el) => {
         if (el.group === "nodes") {
           let classes = el.classes || "";
@@ -106,7 +157,6 @@ class GraphManager {
         }
         return el;
       });
-
       this.cy.add(processedElements);
       this.cy.layout({ name: "cose", animate: false, padding: 50 }).run();
       console.log("GraphManager: Graph loaded and rendered.");
@@ -115,43 +165,61 @@ class GraphManager {
     }
   }
 
+  // --- ADDING BACK MISSING METHODS ---
   addNode(nodeData, classes = "") {
-    console.log("GraphManager: Adding node:", nodeData);
-    return this.cy.add({ group: "nodes", data: nodeData, classes: classes });
+    return this.cy.add({ group: "nodes", data: nodeData, classes });
+  }
+
+  addNodes(nodes) {
+    return this.cy.add(nodes);
   }
 
   addEdge(edgeData) {
-    console.log("GraphManager: Adding edge:", edgeData);
     return this.cy.add({ group: "edges", data: edgeData });
   }
 
+  clear() {
+    this.cy.elements().remove();
+  }
+
   removeNodeById(nodeId) {
-    console.log(`GraphManager: Removing node by ID: ${nodeId}`);
     const node = this.cy.getElementById(nodeId);
     if (node) {
       this.cy.remove(node);
     }
   }
 
+  addClassToNode(nodeId, className) {
+    this.cy.getElementById(nodeId).addClass(className);
+  }
+
+  removeClassFromAllNodes(className) {
+    this.cy.nodes().removeClass(className);
+  }
+
+  resize() {
+    this.cy.resize();
+  }
+
   rerunLayout() {
-    console.log("GraphManager: Rerunning layout...");
     this.cy.layout({ name: "cose", animate: true, padding: 50 }).run();
   }
 
   onNodeClick(callback) {
-    console.log("GraphManager: Registering node click handler.");
     this.cy.on("tap", "node", (event) => {
-      const node = event.target;
-      console.log(`GraphManager: Node clicked with ID: ${node.id()}`);
-      callback(node); // Pass the cytoscape node object to the callback
+      callback(event.target);
+    });
+  }
+
+  onNodeDoubleClick(callback) {
+    this.cy.on("dbltap", "node", (event) => {
+      callback(event.target);
     });
   }
 
   onCanvasClick(callback) {
-    console.log("GraphManager: Registering canvas click handler.");
     this.cy.on("tap", (event) => {
       if (event.target === this.cy) {
-        console.log("GraphManager: Canvas background clicked.");
         callback();
       }
     });

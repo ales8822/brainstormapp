@@ -4,7 +4,7 @@ from typing import List, Dict, Tuple
 import uuid
 
 from ..repositories.graph_repository import GraphRepository
-from ..schemas import BrainstormRequest
+from ..schemas import BrainstormRequest, SimpleNodeRequest,PromoteNodeRequest, CreateEdgeRequest
 from .llm_service import LLMService
 
 class GraphService:
@@ -23,9 +23,60 @@ class GraphService:
         """Updates the status of a specific node."""
         await self.graph_repo.update_node_status(node_id, status)
 
+    
     async def delete_node_branch(self, node_id: str):
         """Deletes a node and all its descendants."""
         await self.graph_repo.delete_branch(node_id)
+
+    async def create_simple_node(self, request: SimpleNodeRequest) -> Dict:
+        """
+        Orchestrates the creation of a single user node.
+        """
+        node_id = f"node-user-{uuid.uuid4()}"
+        await self.graph_repo.create_simple_node(node_id, request.label)
+        
+        # Return a dictionary representing the new node's data
+        return {
+            "id": node_id,
+            "label": request.label,
+            "fullText": request.label,
+            "status": "Idea",  # Default status
+            "generated_by": None,
+            "attachment_path": None,
+            "is_ai_node": False
+        }
+
+    async def get_workspace_elements(self, workspace_id: str) -> Tuple[List[Dict], List[Dict]]:
+        """Fetches all nodes and edges for a given workspace."""
+        nodes = await self.graph_repo.get_workspace_nodes(workspace_id)
+        edges = await self.graph_repo.get_workspace_edges(workspace_id)
+        return nodes, edges
+    
+    async def promote_message_to_node(self, request: PromoteNodeRequest) -> Dict:
+        """
+        Orchestrates creating a node within a workspace.
+        """
+        new_node_id = f"node-user-{uuid.uuid4()}"
+        
+        # --- UPDATE this call to the new repository method ---
+        await self.graph_repo.create_workspace_node(
+            new_node_id=new_node_id,
+            workspace_id=request.parent_node_id, # This is now the workspace ID
+            label=request.label,
+            full_text=request.full_text
+        )
+
+        # --- SIMPLIFY the return object ---
+        return {
+            "id": new_node_id,
+            "label": request.label,
+            "fullText": request.full_text,
+            "status": "Idea",
+            "generated_by": None,
+            "attachment_path": None,
+            "is_ai_node": False,
+        }
+
 
     async def generate_new_idea_branch(self, request: BrainstormRequest) -> Dict:
         """
@@ -75,3 +126,7 @@ class GraphService:
             "model_name": model_name,
             "ai_data": ai_data
         }
+    
+    async def create_edge(self, request: CreateEdgeRequest) -> None:
+        """Orchestrates creating a new edge."""
+        await self.graph_repo.create_edge(request.source, request.target, request.label)

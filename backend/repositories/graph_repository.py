@@ -18,11 +18,14 @@ class GraphRepository:
 
     async def get_full_graph(self) -> Tuple[List[Dict], List[Dict]]:
         """Fetches all nodes and valid edges (read operation, no lock)."""
-        nodes_query = "SELECT * FROM nodes"
+        # --- MODIFICATION: Only select nodes that are NOT in a workspace ---
+        nodes_query = "SELECT * FROM nodes WHERE workspace_id IS NULL"
+        
         edges_query = """
             SELECT e.* FROM edges e
             JOIN nodes s ON e.source_id = s.id
             JOIN nodes t ON e.target_id = t.id
+            WHERE s.workspace_id IS NULL AND t.workspace_id IS NULL
         """
         async with aiosqlite.connect(self.db_path) as db:
             db.row_factory = aiosqlite.Row
@@ -88,3 +91,56 @@ class GraphRepository:
                 await db.execute("PRAGMA foreign_keys = ON")
                 await db.execute(query, (node_id,))
                 await db.commit()
+
+    async def create_simple_node(self, node_id: str, label: str) -> None:
+        """Creates a single, non-AI user node (write operation, uses lock)."""
+        async with self.write_lock:
+            async with aiosqlite.connect(self.db_path) as db:
+                await db.execute(
+                    "INSERT INTO nodes (id, label, fullText, is_ai_node) VALUES (?, ?, ?, ?)",
+                    (node_id, label, label, False)
+                )
+                await db.commit() 
+
+    async def create_workspace_node(self, new_node_id: str, workspace_id: str, label: str, full_text: str) -> None:
+        """Creates a new node that belongs to a specific workspace."""
+        async with self.write_lock:
+            async with aiosqlite.connect(self.db_path) as db:
+                await db.execute(
+                    "INSERT INTO nodes (id, label, fullText, is_ai_node, workspace_id) VALUES (?, ?, ?, ?, ?)",
+                    (new_node_id, label, full_text, False, workspace_id)
+                )
+                await db.commit()       
+
+    async def get_workspace_nodes(self, workspace_id: str) -> List[Dict]:
+        """Fetches all nodes belonging to a specific workspace_id."""
+        query = "SELECT * FROM nodes WHERE workspace_id = ?"
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            async with db.execute(query, (workspace_id,)) as cursor:
+                nodes_res = await cursor.fetchall()
+        return [dict(row) for row in nodes_res]
+
+    async def create_edge(self, source: str, target: str, label: Optional[str] = None):
+        """Creates a new edge between two nodes."""
+        async with self.write_lock:
+            async with aiosqlite.connect(self.db_path) as db:
+                await db.execute(
+                    "INSERT OR IGNORE INTO edges (source_id, target_id, label) VALUES (?, ?, ?)",
+                    (source, target, label)
+                )
+                await db.commit()
+
+    async def get_workspace_edges(self, workspace_id: str) -> List[Dict]:
+        """Fetches all edges where both source and target nodes are in the given workspace."""
+        query = """
+            SELECT e.* FROM edges e
+            JOIN nodes s ON e.source_id = s.id
+            JOIN nodes t ON e.target_id = t.id
+            WHERE s.workspace_id = ? AND t.workspace_id = ?
+        """
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            async with db.execute(query, (workspace_id, workspace_id)) as cursor:
+                edges_res = await cursor.fetchall()
+        return [dict(row) for row in edges_res]

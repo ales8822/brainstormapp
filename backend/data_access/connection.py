@@ -84,7 +84,7 @@ async def initialize_db(conn: aiosqlite.Connection):
     await add_column("nodes", "generated_by", "TEXT")
     await add_column("chat_messages", "generated_by", "TEXT")
     await add_column("nodes", "attachment_path", "TEXT")
-
+    await add_column("nodes", "workspace_id", "TEXT")
     await conn.commit()
     print("Database initialization complete.")
 

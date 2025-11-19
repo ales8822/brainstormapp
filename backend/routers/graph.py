@@ -1,6 +1,6 @@
 # backend/routers/graph.py
 from fastapi import APIRouter, HTTPException, Depends
-from ..schemas import BrainstormRequest, StatusUpdateRequest
+from ..schemas import BrainstormRequest, StatusUpdateRequest, SimpleNodeRequest, PromoteNodeRequest, CreateEdgeRequest
 # Import the service and its dependencies
 from ..services.graph_service import GraphService
 from ..dependencies import get_graph_service
@@ -35,7 +35,8 @@ async def get_graph( # <--- Add async
             "fullText": node_data_map["fullText"],
             "status": node_data_map["status"],
             "generated_by": node_data_map["generated_by"],
-            "attachment_path": node_data_map["attachment_path"]
+            "attachment_path": node_data_map["attachment_path"],
+            "workspace_id": node_data_map.get("workspace_id")
         }
         node_class = "ai-node" if node_data_map["is_ai_node"] else "user-node"
         elements.append({"group": "nodes", "data": node_data, "classes": node_class})
@@ -47,7 +48,44 @@ async def get_graph( # <--- Add async
         
     return elements
 
-# --- FIX 2: Add 'async' and 'await' ---
+@router.get("/workspaces/{workspace_id}/elements")
+async def get_workspace_elements(
+    workspace_id: str,
+    graph_service: GraphService = Depends(get_graph_service)
+):
+    """Fetches all nodes and edges belonging to a specific workspace."""
+    nodes_res, edges_res = await graph_service.get_workspace_elements(workspace_id)
+    
+    elements = []
+    # Format nodes
+    for node_data_map in nodes_res:
+        node_data = {
+            "id": node_data_map["id"],
+            "label": node_data_map["label"],
+            "fullText": node_data_map["fullText"],
+            "status": node_data_map["status"],
+            "generated_by": node_data_map["generated_by"],
+            "attachment_path": node_data_map["attachment_path"],
+            "workspace_id": node_data_map["workspace_id"]
+        }
+        node_class = "ai-node" if node_data_map["is_ai_node"] else "user-node"
+        elements.append({"group": "nodes", "data": node_data, "classes": node_class})
+        
+    # Format edges
+    for edge_row in edges_res:
+        edge_label = edge_row['label'] if edge_row['label'] is not None else ""
+        edge_data = {
+            "id": f"edge-{edge_row['source_id']}-{edge_row['target_id']}",
+            "source": edge_row['source_id'],
+            "target": edge_row['target_id'],
+            "label": edge_label
+        }
+        elements.append({"group": "edges", "data": edge_data})
+        
+    return elements
+
+
+
 @router.put("/nodes/{node_id}/status")
 async def update_node_status( # <--- Add async
     node_id: str, 
@@ -74,6 +112,44 @@ async def delete_node( # <--- Add async
     await graph_service.delete_node_branch(node_id) # <--- Add await
     return {"status": "success", "deleted_root_id": node_id}
 
+@router.post("/graph/nodes/simple", status_code=201)
+async def create_simple_node(
+    request: SimpleNodeRequest,
+    graph_service: GraphService = Depends(get_graph_service)
+):
+    """Creates a single idea node without an AI response."""
+    try:
+        new_node_data = await graph_service.create_simple_node(request)
+        
+        # Format the response to match what Cytoscape expects
+        return {
+            "group": "nodes",
+            "data": new_node_data,
+            "classes": "user-node"
+        }
+    except Exception as e:
+        # Log the exception e for debugging
+        raise HTTPException(status_code=500, detail=f"Failed to create node: {e}")
+
+@router.post("/graph/workspace/nodes", status_code=201)
+async def promote_node_in_workspace(
+    request: PromoteNodeRequest,
+    graph_service: GraphService = Depends(get_graph_service)
+):
+    """Creates a new node within a workspace."""
+    try:
+        new_node_data = await graph_service.promote_message_to_node(request)
+        
+        # --- SIMPLIFY the response, no more edge ---
+        return {
+            "group": "nodes",
+            "data": new_node_data,
+            "classes": "user-node"
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to promote node: {e}")
+        
 @router.post("/brainstorm")
 async def brainstorm_idea(
     request: BrainstormRequest,
@@ -103,3 +179,16 @@ async def brainstorm_idea(
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"LLM service failed: {e}")
+    
+
+@router.post("/graph/edges", status_code=201)
+async def create_edge(
+    request: CreateEdgeRequest,
+    graph_service: GraphService = Depends(get_graph_service)
+    ):
+    """Creates a new edge between two nodes."""
+    try:
+        await graph_service.create_edge(request)
+        return {"status": "success", "source": request.source, "target": request.target}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to create edge: {e}")

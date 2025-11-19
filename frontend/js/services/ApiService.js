@@ -32,6 +32,10 @@ class ApiService {
     return this._fetch("/graph");
   }
 
+  getWorkspaceElements(workspaceId) {
+    return this._fetch(`/workspaces/${workspaceId}/elements`);
+  }
+
   deleteNode(nodeId) {
     return this._fetch(`/nodes/${nodeId}`, { method: "DELETE" });
   }
@@ -46,6 +50,36 @@ class ApiService {
 
   brainstorm(payload) {
     return this._fetch("/brainstorm", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+  }
+
+  createSimpleNode(label) {
+    return this._fetch("/graph/nodes/simple", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ label }),
+    });
+  }
+
+  promoteMessageToNode(payload) {
+    // The payload should be { parentNodeId, label, fullText }
+    return this._fetch("/graph/workspace/nodes", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        parent_node_id: payload.parentNodeId,
+        label: payload.label,
+        full_text: payload.fullText,
+      }),
+    });
+  }
+
+  createEdge(payload) {
+    // payload should be { source, target, label }
+    return this._fetch("/graph/edges", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),

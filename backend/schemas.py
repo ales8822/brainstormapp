@@ -30,3 +30,19 @@ class GroupChatRequest(BaseModel):
     user_message: str = Field(..., alias="userMessage")
     participants: List[str] # The list of model names to query
     target_model: Optional[str] = Field(None, alias="targetModel") 
+
+
+# Add this new class at the end of the file
+class SimpleNodeRequest(BaseModel):
+    label: str
+
+
+class PromoteNodeRequest(BaseModel):
+    parent_node_id: str
+    label: str
+    full_text: str
+
+class CreateEdgeRequest(BaseModel):
+    source: str
+    target: str
+    label: Optional[str] = None

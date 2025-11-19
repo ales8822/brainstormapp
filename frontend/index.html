@@ -5,10 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>AI Brainstorming Canvas</title>
     <link rel="stylesheet" href="style.css" />
-    <script src="https://unpkg.com/cytoscape/dist/cytoscape.min.js"></script>
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/tippy.js@6.3.7/dist/tippy.css"
+    />
   </head>
   <body>
-    <div class="main-container">
+    <div class="main-container" id="overview-view">
       <div class="controls-container">
         <h1>AI Brainstorming</h1>
         <div class="input-area">
@@ -40,6 +43,56 @@
       </div>
       <div id="cy"></div>
     </div>
+
+    <!-- === NEW: WORKSPACE VIEW (Initially hidden) === -->
+    <main id="workspace-view" class="workspace-container" style="display: none">
+      <div class="workspace-header">
+        <nav id="workspace-breadcrumb">
+          <a href="#" id="breadcrumb-home">🏠 Home</a> /
+          <span id="breadcrumb-idea-name">Current Idea</span>
+        </nav>
+      </div>
+      <div
+        id="edge-mode-indicator"
+        style="
+          display: none;
+          position: fixed;
+          top: 60px;
+          left: 50%;
+          transform: translateX(-50%);
+          background: #3498db;
+          color: white;
+          padding: 10px 20px;
+          border-radius: 5px;
+          z-index: 1000;
+          font-weight: bold;
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+        "
+      >
+        🔗 Click a node to connect or click canvas to cancel
+      </div>
+      <div class="workspace-body">
+        <div id="workspace-cy" class="workspace-canvas"></div>
+        <div class="workspace-chat-panel">
+          <h3>Discuss with AI</h3>
+          <div id="workspace-chat-messages" class="chat-messages">
+            <!-- Messages will be added here by JavaScript -->
+          </div>
+          <form id="workspace-chat-form" class="chat-form">
+            <input
+              type="text"
+              id="workspace-chat-input"
+              placeholder="Ask a question..."
+              autocomplete="off"
+              required
+            />
+            <button type="submit">Send</button>
+          </form>
+        </div>
+      </div>
+    </main>
+    <!-- === END: WORKSPACE VIEW === -->
+
     <!-- === SETTINGS MODAL === -->
     <div id="settings-modal" class="modal-overlay" style="display: none">
       <div class="modal-content" style="max-width: 600px; height: auto">
@@ -104,7 +157,7 @@
       </div>
     </div>
 
-    <!-- === IDEA WORKSPACE MODAL (Correct and Unchanged) === -->
+    <!-- === IDEA WORKSPACE MODAL === -->
     <div id="idea-modal" class="modal-overlay" style="display: none">
       <div class="modal-content">
         <div class="modal-header">
@@ -155,7 +208,7 @@
       </div>
     </div>
 
-    <!-- === NEW: Add Participant Popup Menu (Placed at end of body) === -->
+    <!-- === Add Participant Popup Menu === -->
     <div
       id="add-participant-menu"
       class="participant-menu"
@@ -168,11 +221,60 @@
     <div id="mention-menu" class="participant-menu" style="display: none">
       <!-- Mention suggestions will be added here by JavaScript -->
     </div>
-    <!-- Script loading order is correct -->
-    <script src="js/services/ApiService.js"></script>
-    <script src="js/components/GraphManager.js"></script>
-    <script src="js/components/SettingsModal.js"></script>
-    <script src="js/components/IdeaWorkspace.js"></script>
-    <script src="js/App.js"></script>
+
+    <!-- Script loading -->
+    <script>
+      function loadScript(src) {
+        return new Promise((resolve, reject) => {
+          const script = document.createElement("script");
+          script.src = src;
+          script.onload = () => {
+            console.log(`Successfully loaded: ${src}`);
+            resolve();
+          };
+          script.onerror = () => {
+            console.error(`Failed to load: ${src}`);
+            reject(new Error(`Script load error for ${src}`));
+          };
+          document.body.appendChild(script);
+        });
+      }
+
+      // Chain the loading of all scripts to guarantee order
+      loadScript(
+        "https://cdn.jsdelivr.net/npm/@popperjs/core@2.11.6/dist/umd/popper.min.js"
+      )
+        .then(() =>
+          loadScript(
+            "https://cdn.jsdelivr.net/npm/tippy.js@6.3.7/dist/tippy-bundle.umd.min.js"
+          )
+        )
+        .then(() => {
+          // Verify tippy is available globally
+          if (typeof tippy === "undefined") {
+            console.error("Tippy.js loaded but tippy global not found");
+          } else {
+            console.log("Tippy.js successfully loaded and available");
+          }
+          return loadScript(
+            "https://unpkg.com/cytoscape@3.23.0/dist/cytoscape.min.js"
+          );
+        })
+        .then(() => loadScript("js/services/ApiService.js"))
+        .then(() => loadScript("js/components/GraphManager.js"))
+        .then(() => loadScript("js/components/SettingsModal.js"))
+        .then(() => loadScript("js/components/IdeaWorkspace.js"))
+        .then(() => loadScript("js/App.js"))
+        .then(() => {
+          // All scripts are loaded, now we can safely start the app
+          main();
+        })
+        .catch((error) => {
+          console.error(
+            "A critical script failed to load, the app cannot start.",
+            error
+          );
+        });
+    </script>
   </body>
 </html>
