@@ -154,3 +154,15 @@ class GraphRepository:
                     (source, target)
                 )
                 await db.commit()
+
+    async def update_node_content(self, node_id: str, new_text: str):
+        """Updates the text content (label and fullText) of a node."""
+        # We also update the label for consistency, using a truncated version.
+        new_label = (new_text[:100] + '...') if len(new_text) > 100 else new_text
+        async with self.write_lock:
+            async with aiosqlite.connect(self.db_path) as db:
+                await db.execute(
+                    "UPDATE nodes SET label = ?, fullText = ? WHERE id = ?",
+                    (new_label, new_text, node_id)
+                )
+                await db.commit()            

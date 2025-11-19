@@ -81,11 +81,14 @@
           >
             Status: <span></span>
           </div>
-          <div id="inspector-content" class="inspector-content">
-            <p class="inspector-placeholder">
-              Click a node to see its full content.
-            </p>
-          </div>
+          <textarea
+            id="inspector-content-editor"
+            class="inspector-content-editor"
+            placeholder="Node content..."
+          ></textarea>
+          <button id="inspector-save-button" class="inspector-save-button">
+            Save Changes
+          </button>
           <div id="inspector-status-controls" class="status-controls">
             <button class="status-btn" data-status="Idea">Idea</button>
             <button class="status-btn" data-status="InProgress">

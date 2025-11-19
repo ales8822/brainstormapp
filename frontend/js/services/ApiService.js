@@ -95,6 +95,14 @@ class ApiService {
     });
   }
 
+  updateNodeContent(nodeId, newText) {
+    return this._fetch(`/nodes/${nodeId}/content`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ full_text: newText }),
+    });
+  }
+
   uploadFile(formData) {
     // Note: _fetch is not used here because FormData sets its own headers
     console.log("ApiService: Uploading file...");

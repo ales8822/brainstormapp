@@ -50,3 +50,6 @@ class CreateEdgeRequest(BaseModel):
 class DeleteEdgeRequest(BaseModel):
     source: str
     target: str
+
+class NodeContentUpdateRequest(BaseModel):
+    full_text: str

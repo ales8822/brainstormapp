@@ -38,10 +38,13 @@ class App {
 
     // --- ADD DOM REFS FOR INSPECTOR ---
     this.inspectorPanel = document.getElementById("workspace-inspector-panel");
-    this.inspectorContent = document.getElementById("inspector-content");
+    this.inspectorContentEditor = document.getElementById(
+      "inspector-content-editor"
+    );
     this.inspectorStatusDisplay = document.getElementById(
       "inspector-status-display"
     );
+    this.inspectorSaveButton = document.getElementById("inspector-save-button");
     this.inspectorStatusControls = document.getElementById(
       "inspector-status-controls"
     );
@@ -157,6 +160,9 @@ class App {
         console.log("Clicked element did NOT match '.status-btn'");
       }
     });
+    this.inspectorSaveButton.addEventListener("click", () =>
+      this.handleInspectorSave()
+    );
   }
 
   async enterWorkspace(node) {
@@ -340,7 +346,7 @@ class App {
         // CASE 2: We are NOT in edge-drawing mode. This is a normal node click.
         console.log("Node selected for inspector:", targetNode.data("label"));
         this.inspectedNode = targetNode;
-        this.inspectorContent.textContent = targetNode.data("fullText");
+        this.inspectorContentEditor.value = targetNode.data("fullText");
 
         // --- NEW LOGIC ---
         this.inspectorStatusDisplay.querySelector("span").textContent =
@@ -683,7 +689,7 @@ class App {
       "Workspace canvas clicked - cleaning up tooltips and edge mode"
     );
     // Hide Inspector
-    this.inspectorContent.innerHTML = `<p class="inspector-placeholder">Click a node to see its full content.</p>`;
+    this.inspectorContentEditor.value = "";
     this.inspectorPanel.classList.remove("visible");
     this.inspectedNode = null; // Clear the inspected node
     this.inspectorStatusDisplay.style.display = "none"; // Hide the status
@@ -702,7 +708,7 @@ class App {
       this.workspaceGraph.removeClassFromAllNodes("edge-source-selected");
       this.edgeDrawSource = null;
     }
-    this.inspectorContent.innerHTML = `<p class="inspector-placeholder">Click a node to see its full content.</p>`;
+    this.inspectorContentEditor.innerHTML = `<p class="inspector-placeholder">Click a node to see its full content.</p>`;
     this.inspectorPanel.classList.remove("visible");
     this.inspectedNode = null; // Clear the inspected node
     // Always reset cursor and indicator
@@ -711,7 +717,34 @@ class App {
       this.edgeModeIndicator.style.display = "none";
     }
   }
+  async handleInspectorSave() {
+    if (!this.inspectedNode) return;
 
+    const nodeId = this.inspectedNode.id();
+    const newText = this.inspectorContentEditor.value;
+    console.log(`Saving new content for node ${nodeId}`);
+
+    try {
+      // Show some visual feedback, e.g., disable button
+      this.inspectorSaveButton.disabled = true;
+      this.inspectorSaveButton.textContent = "Saving...";
+
+      const response = await this.api.updateNodeContent(nodeId, newText);
+
+      // Update the node data on the frontend
+      this.inspectedNode.data("fullText", newText);
+      this.inspectedNode.data("label", response.new_label);
+
+      console.log("Node content updated successfully.");
+    } catch (error) {
+      console.error("Failed to save node content:", error);
+      alert("Could not save changes.");
+    } finally {
+      // Re-enable button
+      this.inspectorSaveButton.disabled = false;
+      this.inspectorSaveButton.textContent = "Save Changes";
+    }
+  }
   // --- ADD THIS NEW HANDLER ---
   async handleInspectorStatusChange(newStatus) {
     if (!this.inspectedNode) return;

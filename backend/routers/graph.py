@@ -1,6 +1,6 @@
 # backend/routers/graph.py
 from fastapi import APIRouter, HTTPException, Depends
-from ..schemas import BrainstormRequest, StatusUpdateRequest, SimpleNodeRequest, PromoteNodeRequest, CreateEdgeRequest, DeleteEdgeRequest
+from ..schemas import BrainstormRequest, StatusUpdateRequest, SimpleNodeRequest, PromoteNodeRequest, CreateEdgeRequest, DeleteEdgeRequest, NodeContentUpdateRequest
 # Import the service and its dependencies
 from ..services.graph_service import GraphService
 from ..dependencies import get_graph_service
@@ -208,3 +208,18 @@ async def delete_edge(
         return {"status": "success", "source": request.source, "target": request.target}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to delete edge: {e}")
+    
+
+@router.put("/nodes/{node_id}/content", status_code=200)
+async def update_node_content(
+    node_id: str,
+    request: NodeContentUpdateRequest,
+    graph_service: GraphService = Depends(get_graph_service)
+):
+    """Updates the text content of a node."""
+    try:
+        await graph_service.update_node_content(node_id, request)
+        new_label = (request.full_text[:100] + '...') if len(request.full_text) > 100 else request.full_text
+        return {"status": "success", "updated_id": node_id, "new_label": new_label}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to update node content: {e}")
