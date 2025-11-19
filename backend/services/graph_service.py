@@ -63,7 +63,8 @@ class GraphService:
             new_node_id=new_node_id,
             workspace_id=request.parent_node_id, # This is now the workspace ID
             label=request.label,
-            full_text=request.full_text
+            full_text=request.full_text,
+            attachment_path=request.attachment_path
         )
 
         # --- SIMPLIFY the return object ---
@@ -73,7 +74,7 @@ class GraphService:
             "fullText": request.full_text,
             "status": "Idea",
             "generated_by": None,
-            "attachment_path": None,
+            "attachment_path": request.attachment_path,
             "is_ai_node": False,
         }
 

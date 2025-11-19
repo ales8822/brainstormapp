@@ -75,6 +75,13 @@
         <div id="workspace-inspector-panel" class="workspace-inspector-panel">
           <h3>Node Details</h3>
           <div
+            id="inspector-attachment-container"
+            class="inspector-attachment-container"
+            style="display: none"
+          >
+            <img id="inspector-attachment-image" src="" alt="Node attachment" />
+          </div>
+          <div
             id="inspector-status-display"
             class="inspector-status-display"
             style="display: none"
@@ -107,6 +114,29 @@
             <!-- Messages will be added here by JavaScript -->
           </div>
           <form id="workspace-chat-form" class="chat-form">
+            <!-- ADD THIS FILE UPLOAD CONTAINER -->
+            <div class="chat-file-upload-container">
+              <input
+                type="file"
+                id="workspace-file-input"
+                accept="image/*"
+                style="display: none"
+              />
+              <button
+                type="button"
+                id="workspace-attach-file-button"
+                class="chat-attach-btn"
+                title="Attach Image"
+              >
+                📎
+              </button>
+              <div id="workspace-file-preview-container" style="display: none">
+                <img id="workspace-file-preview-image" src="" alt="Preview" />
+                <button type="button" id="workspace-remove-file-button">
+                  &times;
+                </button>
+              </div>
+            </div>
             <input
               type="text"
               id="workspace-chat-input"

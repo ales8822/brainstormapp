@@ -34,10 +34,33 @@ class App {
     this.workspaceChatMessages = document.getElementById(
       "workspace-chat-messages"
     );
+
+    // --- ADD WORKSPACE ATTACHMENT REFS ---
+    this.workspaceFileInput = document.getElementById("workspace-file-input");
+    this.workspaceAttachFileButton = document.getElementById(
+      "workspace-attach-file-button"
+    );
+    this.workspaceFilePreviewContainer = document.getElementById(
+      "workspace-file-preview-container"
+    );
+    this.workspaceFilePreviewImage = document.getElementById(
+      "workspace-file-preview-image"
+    );
+    this.workspaceRemoveFileButton = document.getElementById(
+      "workspace-remove-file-button"
+    );
+
     this.edgeModeIndicator = document.getElementById("edge-mode-indicator");
 
-    // --- ADD DOM REFS FOR INSPECTOR ---
+    // --- DOM REFS FOR INSPECTOR ---
     this.inspectorPanel = document.getElementById("workspace-inspector-panel");
+
+    this.inspectorAttachmentContainer = document.getElementById(
+      "inspector-attachment-container"
+    );
+    this.inspectorAttachmentImage = document.getElementById(
+      "inspector-attachment-image"
+    );
     this.inspectorContentEditor = document.getElementById(
       "inspector-content-editor"
     );
@@ -51,6 +74,7 @@ class App {
     this.activeWorkspaceNode = null;
     this.chatHistory = [];
     this.attachedFilePath = null;
+    this.workspaceAttachedFilePath = null;
     this.inspectedNode = null;
     this._bindUIEventListeners();
     this.workspaceEventListenersSetup = false;
@@ -148,6 +172,17 @@ class App {
       this.resetFileUpload()
     );
     this.fileInput.addEventListener("change", (e) => this.handleFileUpload(e));
+    // --- ADD WORKSPACE ATTACHMENT LISTENERS ---
+    this.workspaceAttachFileButton.addEventListener("click", () =>
+      this.workspaceFileInput.click()
+    );
+    this.workspaceFileInput.addEventListener("change", (e) =>
+      this.handleWorkspaceFileUpload(e)
+    );
+    this.workspaceRemoveFileButton.addEventListener("click", () =>
+      this.resetWorkspaceFileUpload()
+    );
+
     document.addEventListener("keydown", (e) => this.handleKeyDown(e));
     this.inspectorStatusControls.addEventListener("click", (e) => {
       console.log(
@@ -205,6 +240,7 @@ class App {
     this.activeWorkspaceNode = null;
     this.edgeDrawSource = null; // Clear edge drawing state
     this.inspectedNode = null;
+    this.resetWorkspaceFileUpload(); // Reset attachment when leaving
     document.body.style.cursor = "default"; // Reset cursor
     window.location.hash = "";
     this.workspaceView.style.display = "none";
@@ -347,7 +383,14 @@ class App {
         console.log("Node selected for inspector:", targetNode.data("label"));
         this.inspectedNode = targetNode;
         this.inspectorContentEditor.value = targetNode.data("fullText");
-
+        // --- SHOW/HIDE ATTACHMENT ---
+        const attachmentPath = targetNode.data("attachment_path");
+        if (attachmentPath) {
+          this.inspectorAttachmentImage.src = attachmentPath;
+          this.inspectorAttachmentContainer.style.display = "block";
+        } else {
+          this.inspectorAttachmentContainer.style.display = "none";
+        }
         // --- NEW LOGIC ---
         this.inspectorStatusDisplay.querySelector("span").textContent =
           targetNode.data("status");
@@ -512,14 +555,15 @@ class App {
     if (!this.activeWorkspaceNode) return;
 
     const messageText = this.workspaceChatInput.value.trim();
-    if (!messageText) return;
+    const attachmentPathForThisMessage = this.workspaceAttachedFilePath; // Capture the path for this specific message
 
-    this.appendChatMessage("user", messageText);
+    if (!messageText && !attachmentPathForThisMessage) return;
+
+    this.appendChatMessage("user", messageText, attachmentPathForThisMessage);
     this.workspaceChatInput.value = "";
     this.workspaceChatInput.focus();
 
     this.chatHistory.push({ role: "user", parts: [messageText] });
-
     const thinkingIndicator = this.appendChatMessage("model", "Thinking...");
 
     try {
@@ -528,73 +572,141 @@ class App {
         nodeContext: this.activeWorkspaceNode.data("fullText"),
         history: this.chatHistory,
         userMessage: messageText,
+        attachmentPath: attachmentPathForThisMessage,
       };
 
       const response = await this.api.sendMessage(payload);
-
       const aiResponseText = response.response;
+
+      // --- FIX: Update the AI's message bubble with text and attachment context ---
       const textSpan = thinkingIndicator.querySelector("span");
       if (textSpan) {
         textSpan.textContent = aiResponseText;
-      } else {
-        thinkingIndicator.textContent = aiResponseText;
       }
+
+      // If this was a response to an image, add the context to the AI's message bubble
+      if (attachmentPathForThisMessage) {
+        thinkingIndicator.dataset.attachmentPath = attachmentPathForThisMessage;
+        const img = document.createElement("img");
+        img.src = attachmentPathForThisMessage;
+        img.classList.add("chat-message-attachment");
+        thinkingIndicator.appendChild(img);
+      }
+      // --- END FIX ---
 
       this.chatHistory.push({ role: "model", parts: [aiResponseText] });
     } catch (error) {
       thinkingIndicator.textContent = `Error: ${error.message}`;
+    } finally {
+      // Don't reset the file upload here, allow it to be sticky
     }
   }
 
-  appendChatMessage(role, text) {
+  appendChatMessage(role, text, attachmentPath = null) {
     const messageElement = document.createElement("div");
     messageElement.classList.add("chat-message", role);
 
-    const textSpan = document.createElement("span");
-    textSpan.textContent = text;
-    messageElement.appendChild(textSpan);
+    if (attachmentPath) {
+      messageElement.dataset.attachmentPath = attachmentPath;
+    }
 
-    const promoteBtn = document.createElement("button");
-    promoteBtn.classList.add("promote-button");
-    promoteBtn.textContent = "+";
-    promoteBtn.title = "Promote to node";
-    promoteBtn.addEventListener("click", (event) => {
-      const currentText =
-        event.currentTarget.parentElement.querySelector("span").textContent;
-      this.handlePromoteMessage(currentText);
-    });
-    messageElement.appendChild(promoteBtn);
+    if (text) {
+      const textSpan = document.createElement("span");
+      textSpan.textContent = text;
+      messageElement.appendChild(textSpan);
+    }
+
+    if (attachmentPath && role === "user") {
+      // Only show thumbnail on user message initially
+      const img = document.createElement("img");
+      img.src = attachmentPath;
+      img.classList.add("chat-message-attachment");
+      messageElement.appendChild(img);
+    }
+
+    // --- REVERTED FIX: Always add promote button for AI messages ---
+    if (role === "model") {
+      const promoteBtn = document.createElement("button");
+      promoteBtn.classList.add("promote-button");
+      promoteBtn.textContent = "+";
+      promoteBtn.title = "Promote to node";
+      promoteBtn.addEventListener("click", (event) => {
+        const parentMessage = event.currentTarget.parentElement;
+        // If there's text, use it. Otherwise, provide a default.
+        const currentText =
+          parentMessage.querySelector("span")?.textContent || "Image Analysis";
+        const currentAttachment = parentMessage.dataset.attachmentPath || null;
+        this.handlePromoteMessage(currentText, currentAttachment);
+      });
+      messageElement.appendChild(promoteBtn);
+    }
 
     this.workspaceChatMessages.appendChild(messageElement);
-
     this.workspaceChatMessages.scrollTop =
       this.workspaceChatMessages.scrollHeight;
-
     return messageElement;
   }
 
-  async handlePromoteMessage(messageText) {
+  async handlePromoteMessage(messageText, attachmentPath = null) {
     if (!this.activeWorkspaceNode) {
       console.error("Cannot promote node, no active workspace.");
       return;
     }
-    // console.log("Promoting message to node:", messageText);
 
     try {
       const payload = {
         parentNodeId: this.activeWorkspaceNode.id(),
         label: messageText.substring(0, 100),
         fullText: messageText,
+        attachmentPath: attachmentPath, // Pass the attachment path
       };
 
       const newNode = await this.api.promoteMessageToNode(payload);
-
       this.workspaceGraph.addNode(newNode.data, newNode.classes);
-
       this.workspaceGraph.rerunLayout();
     } catch (error) {
       console.error("App: Failed to promote message to node:", error);
       alert(`Error saving node: ${error.message}`);
+    }
+  }
+
+  resetWorkspaceFileUpload() {
+    this.workspaceFileInput.value = "";
+    this.workspaceAttachedFilePath = null;
+    this.workspaceFilePreviewContainer.style.display = "none";
+    this.workspaceAttachFileButton.style.display = "block";
+  }
+
+  async handleWorkspaceFileUpload(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    // Show preview immediately
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      this.workspaceFilePreviewImage.src = e.target.result;
+      this.workspaceAttachFileButton.style.display = "none";
+      this.workspaceFilePreviewContainer.style.display = "block";
+    };
+    reader.readAsDataURL(file);
+
+    // Upload file
+    const formData = new FormData();
+    formData.append("file", file);
+    this.loader.style.display = "block"; // You might want a more targeted loader
+    try {
+      const data = await this.api.uploadFile(formData);
+      this.workspaceAttachedFilePath = data.filePath;
+      console.log(
+        "Workspace file uploaded, path:",
+        this.workspaceAttachedFilePath
+      );
+    } catch (error) {
+      console.error("Workspace upload error:", error);
+      alert("Failed to upload image.");
+      this.resetWorkspaceFileUpload();
+    } finally {
+      this.loader.style.display = "none";
     }
   }
 

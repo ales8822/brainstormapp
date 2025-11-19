@@ -21,6 +21,7 @@ class ChatRequest(BaseModel):
     node_context: str = Field(..., alias="nodeContext")
     history: List[ChatMessage]
     user_message: str = Field(..., alias="userMessage")
+    attachment_path: Optional[str] = Field(None, alias="attachmentPath")
 
 class GroupChatRequest(BaseModel):
     node_id: str = Field(..., alias="nodeId")
@@ -41,6 +42,7 @@ class PromoteNodeRequest(BaseModel):
     parent_node_id: str
     label: str
     full_text: str
+    attachment_path: Optional[str] = None
 
 class CreateEdgeRequest(BaseModel):
     source: str

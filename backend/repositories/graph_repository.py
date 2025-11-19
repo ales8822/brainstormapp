@@ -102,15 +102,15 @@ class GraphRepository:
                 )
                 await db.commit() 
 
-    async def create_workspace_node(self, new_node_id: str, workspace_id: str, label: str, full_text: str) -> None:
+    async def create_workspace_node(self, new_node_id: str, workspace_id: str, label: str, full_text: str, attachment_path: Optional[str] = None) -> None:
         """Creates a new node that belongs to a specific workspace."""
         async with self.write_lock:
             async with aiosqlite.connect(self.db_path) as db:
                 await db.execute(
-                    "INSERT INTO nodes (id, label, fullText, is_ai_node, workspace_id) VALUES (?, ?, ?, ?, ?)",
-                    (new_node_id, label, full_text, False, workspace_id)
+                    "INSERT INTO nodes (id, label, fullText, is_ai_node, workspace_id, attachment_path) VALUES (?, ?, ?, ?, ?, ?)",
+                    (new_node_id, label, full_text, False, workspace_id, attachment_path)
                 )
-                await db.commit()       
+                await db.commit()      
 
     async def get_workspace_nodes(self, workspace_id: str) -> List[Dict]:
         """Fetches all nodes belonging to a specific workspace_id."""

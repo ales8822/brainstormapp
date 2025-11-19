@@ -173,6 +173,16 @@ h3 {
   border-bottom-right-radius: 4px;
   padding: 10px 15px;
   border-radius: 18px;
+  display: flex; /* Use flexbox for alignment */
+  flex-direction: column; /* Stack content vertically */
+  gap: 8px; /* Add space between text and image */
+}
+.chat-message-attachment {
+  max-width: 100px;
+  max-height: 100px;
+  border-radius: 6px;
+  object-fit: cover;
+  align-self: flex-start; /* Align thumbnail to the start */
 }
 .chat-message.model {
   background-color: #ecf0f1;
@@ -217,6 +227,7 @@ h3 {
   display: flex;
   margin-top: 10px;
   gap: 10px;
+  align-items: flex-start; /* Align items to the top */
 }
 #chat-input,
 #workspace-chat-input {
@@ -228,6 +239,52 @@ h3 {
   flex-shrink: 0;
   padding: 10px 20px; /* Added */
   font-size: 16px; /* Added */
+}
+
+.chat-file-upload-container {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.chat-attach-btn {
+  width: 45px;
+  height: 45px;
+  padding: 0;
+  font-size: 20px;
+  background-color: #6c757d;
+  line-height: 1;
+}
+.chat-attach-btn:hover {
+  background-color: #5a6268;
+}
+
+#workspace-file-preview-container {
+  position: relative;
+  width: 45px;
+  height: 45px;
+}
+
+#workspace-file-preview-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid #dfe6e9;
+}
+
+#workspace-remove-file-button {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  font-size: 14px;
+  line-height: 1;
+  border-radius: 50%;
+  background-color: rgba(0, 0, 0, 0.6);
+  color: white;
+  border: 2px solid white;
 }
 .status-controls {
   display: flex;
@@ -628,7 +685,18 @@ h3 {
   margin-bottom: 15px;
   flex-shrink: 0;
 }
+.inspector-attachment-container {
+  margin-bottom: 15px;
+  flex-shrink: 0;
+}
 
+#inspector-attachment-image {
+  width: 100%;
+  max-height: 250px;
+  object-fit: contain;
+  border-radius: 8px;
+  background-color: #f0f2f5;
+}
 .inspector-content-editor {
   flex-grow: 1;
   width: 100%;

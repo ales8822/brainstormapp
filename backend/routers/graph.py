@@ -53,11 +53,9 @@ async def get_workspace_elements(
     workspace_id: str,
     graph_service: GraphService = Depends(get_graph_service)
 ):
-    """Fetches all nodes and edges belonging to a specific workspace."""
     nodes_res, edges_res = await graph_service.get_workspace_elements(workspace_id)
     
     elements = []
-    # Format nodes
     for node_data_map in nodes_res:
         node_data = {
             "id": node_data_map["id"],
@@ -68,12 +66,15 @@ async def get_workspace_elements(
             "attachment_path": node_data_map["attachment_path"],
             "workspace_id": node_data_map["workspace_id"]
         }
-         # --- FIX: Add the status class here ---
         node_class = "ai-node" if node_data_map["is_ai_node"] else "user-node"
         if node_data_map.get("status"):
             node_class += f' status-{node_data_map["status"]}'
         
-        elements.append({"group": "nodes", "data": node_data, "classes": node_class})
+        # --- ADD THIS FIX ---
+        if node_data_map.get("attachment_path"):
+            node_class += ' has-attachment'
+        
+        elements.append({"group": "nodes", "data": node_data, "classes": node_class.strip()})
         
     # Format edges
     for edge_row in edges_res:

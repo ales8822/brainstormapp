@@ -65,7 +65,6 @@ class ApiService {
   }
 
   promoteMessageToNode(payload) {
-    // The payload should be { parentNodeId, label, fullText }
     return this._fetch("/graph/workspace/nodes", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -73,6 +72,8 @@ class ApiService {
         parent_node_id: payload.parentNodeId,
         label: payload.label,
         full_text: payload.fullText,
+        // --- FIX: Use snake_case to match the backend schema ---
+        attachment_path: payload.attachmentPath,
       }),
     });
   }

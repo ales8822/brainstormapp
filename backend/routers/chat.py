@@ -32,7 +32,7 @@ async def chat_with_idea(
             history=request.history,
             userMessage=request.user_message,
             participants=['gemini-2.0-flash'],
-            attachmentPath=None
+            attachmentPath=request.attachment_path
         )
         llm_response = await chat_service.get_single_chat_response_and_save(temp_request)
         return {"response": llm_response["response"], "model_name": llm_response["model_name"]}

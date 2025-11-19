@@ -92,7 +92,6 @@ class GraphManager {
       elements: [],
     });
 
-    // Your check is good, let's keep it.
     if (typeof this.cy.nodeHtmlLabel === "function") {
       this.cy.nodeHtmlLabel([
         {
@@ -173,9 +172,23 @@ class GraphManager {
     }
   }
 
-  // --- ADDING BACK MISSING METHODS ---
   addNode(nodeData, classes = "") {
-    return this.cy.add({ group: "nodes", data: nodeData, classes });
+    let finalClasses = classes;
+    // Check for attachment_path in the data object itself.
+    if (nodeData.attachment_path && !finalClasses.includes("has-attachment")) {
+      finalClasses += " has-attachment";
+    }
+    console.log(
+      "GraphManager: Adding node:",
+      nodeData,
+      "with classes:",
+      finalClasses.trim()
+    );
+    return this.cy.add({
+      group: "nodes",
+      data: nodeData,
+      classes: finalClasses.trim(),
+    });
   }
 
   addNodes(nodes) {
