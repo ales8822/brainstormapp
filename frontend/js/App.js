@@ -182,9 +182,8 @@ class App {
   }
 
   async handleKeyDown(event) {
-    // Only act if we are inside a workspace and not typing in an input
+    // Ignore if typing in an input field
     if (
-      !this.activeWorkspaceNode ||
       event.target.tagName === "INPUT" ||
       event.target.tagName === "TEXTAREA"
     ) {
@@ -192,29 +191,34 @@ class App {
     }
 
     if (event.key === "Delete" || event.key === "Backspace") {
-      const selected = this.workspaceGraph.cy.$(":selected");
-      if (selected.length === 0) return;
+      event.preventDefault(); // Always prevent default browser action
 
-      event.preventDefault(); // Prevent browser back navigation
+      // Determine which graph is active
+      const activeGraph = this.activeWorkspaceNode
+        ? this.workspaceGraph
+        : this.graph;
+      if (!activeGraph) return;
+
+      const selected = activeGraph.cy.$(":selected");
+      if (selected.length === 0) return;
 
       const selectedEdge = selected.filter("edge");
       const selectedNode = selected.filter("node");
 
       if (selectedEdge.length > 0) {
+        // Edge deletion only happens in the workspace
         const edge = selectedEdge.first();
         const sourceId = edge.source().id();
         const targetId = edge.target().id();
         const edgeId = edge.id();
 
-        console.log(`Attempting to delete edge: ${sourceId} -> ${targetId}`);
-
         try {
           edge.remove();
           await this.api.deleteEdge({ source: sourceId, target: targetId });
-          console.log("Edge deleted successfully from database.");
+          console.log("Edge deleted from database.");
         } catch (error) {
           console.error("Failed to delete edge:", error);
-          this.workspaceGraph.addEdge({
+          activeGraph.addEdge({
             source: sourceId,
             target: targetId,
             id: edgeId,
@@ -222,39 +226,39 @@ class App {
           alert("Failed to delete connection.");
         }
       } else if (selectedNode.length > 0) {
-        // --- NEW LOGIC FOR NODE DELETION ---
         const node = selectedNode.first();
         const nodeId = node.id();
 
-        // Add a confirmation dialog
-        if (
-          !confirm(
-            `Are you sure you want to delete the node "${node.data(
+        // Use a different confirmation message depending on the context
+        const isIdeaNode = !this.activeWorkspaceNode;
+        const confirmationMessage = isIdeaNode
+          ? `Are you sure you want to delete the entire idea "${node.data(
               "label"
-            )}"? This cannot be undone.`
-          )
-        ) {
+            )}" and all its contents? This cannot be undone.`
+          : `Are you sure you want to delete the node "${node.data(
+              "label"
+            )}"? This cannot be undone.`;
+
+        if (!confirm(confirmationMessage)) {
           return;
         }
 
-        console.log(`Attempting to delete node: ${nodeId}`);
-
         try {
-          // Visually remove the node and its connected edges immediately
           node.remove();
-
-          // Call the existing API to delete from the database
           await this.api.deleteNode(nodeId);
-          console.log("Node deleted successfully from the database.");
+          console.log(`Node ${nodeId} deleted from database.`);
         } catch (error) {
-          console.error("Failed to delete node:", error);
-          // Re-loading the workspace is the safest way to restore state on failure
+          console.error(`Failed to delete node ${nodeId}:`, error);
           alert(
-            "Failed to delete the node from the database. The workspace will now reload to ensure consistency."
+            "Failed to delete the node. The view will be reloaded to ensure consistency."
           );
-          this.enterWorkspace(this.activeWorkspaceNode);
+          // Reload the appropriate graph
+          if (isIdeaNode) {
+            this.graph.loadGraph();
+          } else {
+            this.enterWorkspace(this.activeWorkspaceNode);
+          }
         }
-        // --- END OF NEW LOGIC ---
       }
     }
   }
