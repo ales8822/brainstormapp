@@ -1,47 +1,53 @@
+
+
 # AI Brainstorming Canvas
 
-Welcome to the AI Brainstorming Canvas, a revolutionary Python-based application designed to visualize and develop ideas. This tool goes beyond traditional mind maps by integrating a powerful, interactive visual graph with multi-agent AI conversations, allowing you to explore, expand, and track your ideas from inception to completion.
+Welcome to the AI Brainstorming Canvas, a Python-based application designed to take your ideas from a simple spark to a fully structured project. This tool evolves beyond traditional mind maps by integrating a hierarchical system of visual canvases with a powerful, multimodal AI chat, allowing you to explore, connect, and manage your thoughts in a focused and persistent environment.
 
-![Application Screenshot](https://i.imgur.com/your-screenshot-url.png) 
-*(Suggestion: Take a great screenshot of your app in action, upload it to a site like Imgur, and paste the link here.)*
+*(Suggestion: Take a new screenshot showing the workspace view with the inspector, canvas, and chat panels, upload it to a site like Imgur, and paste the link here.)*
+``
 
 ---
 
 ## ✨ Features
 
-*   **Visual Idea Graph:** Create ideas as nodes on an infinite canvas. Connect them to build out complex thought trees and visualize relationships.
-*   **Multimodal Brainstorming:** Start new ideas with just text, or upload an **image** for the AI to analyze and discuss.
-*   **True Asynchronous Multi-Agent Chat:** Engage in a real-time group chat with multiple AI models simultaneously. Responses stream in as they become available, thanks to a fully asynchronous backend.
-*   **Persistent Chat History:** Every node has its own dedicated "Idea Workspace" with a persistent chat history, saved to a local SQLite database.
-*   **Idea Lifecycle Tracking:** Mark the status of any idea (`Idea`, `In Progress`, `Completed`, `Archived`) with clear, color-coded visual indicators.
-*   **Dynamic Provider Switching:** A full-featured settings panel allows you to switch between different AI providers, manage API keys, and configure custom endpoints on the fly.
-*   **Model Provenance:** The application tracks and displays exactly which AI model generated each node and each chat message.
+This application has been significantly refactored to support a more organized and powerful workflow.
 
-## 🛠️ Technology Stack & Architecture
+*   **Hierarchical Canvas System:**
+    *   **Overview Canvas:** A top-level space to create and organize your main "Ideas" as distinct nodes.
+    *   **Workspace Canvas:** Double-click any Idea Node to enter a dedicated, infinite canvas. This is your focused environment for developing that single idea.
+    *   **Breadcrumb Navigation:** A clear breadcrumb (`Home / Your Idea Name`) at the top of the workspace allows for easy navigation back to the overview.
 
-This project is a full-stack application built with a modern, asynchronous, and object-oriented architecture.
+*   **Advanced Workspace Functionality:**
+    *   **Multimodal Chat:** Engage in a rich conversation with an AI assistant on the right-hand panel. Use text or upload images for the AI to analyze and discuss.
+    *   **"Sticky" Image Context:** An uploaded image remains as the context for the entire conversation, being sent with every subsequent prompt until you manually remove it.
+    *   **Promote to Node:** Instantly convert any AI or user message from the chat into a new, persistent node on the workspace canvas with a single click.
+    *   **Manual Edge Creation:** Visually connect related nodes within the workspace. Hovering over a node reveals a `+` button; click it and then click another node to draw a persistent edge between them.
+    *   **Full Graph CRUD:** A complete set of tools for graph management.
+        *   **Create:** Promote chat messages to create nodes.
+        *   **Connect:** Manually draw edges between nodes.
+        *   **Delete:** Select any node or edge and press the `Delete` or `Backspace` key to remove it permanently (with confirmation for nodes).
+
+*   **Persistent Node Inspector:**
+    *   **Editable Content:** Click any node in the workspace to open the Inspector panel on the left. You can view and edit the node's full text content and save your changes.
+    *   **Lifecycle Tracking:** Change the status of any node (`Idea`, `In Progress`, `Completed`, `Archived`) using color-coded buttons in the inspector. The changes are saved and reflected on the node's color.
+    *   **Image Display:** If a node was created from an image-based chat message, the associated image is displayed directly in the inspector panel.
+
+*   **Robust & Modern Architecture:**
+    *   **Stateful Routing:** The app uses URL hashes (`#/workspace/:id`) to remember your position. You can refresh the page and land exactly where you left off, whether in the overview or a specific workspace.
+    *   **Persistent Storage:** All ideas, workspace nodes, edges, and their statuses are automatically saved to a local SQLite database.
+    *   **Dynamic AI Configuration:** A full settings panel allows for switching between AI providers (Google Gemini, Custom Ollama/RunPod endpoints) and managing API keys on the fly.
+
+## 🛠️ Technology Stack
 
 *   **Backend:**
     *   **Framework:** **FastAPI** (fully `async`)
-    *   **Architecture:** **Service Layer + Repository Pattern** for clear separation of concerns.
-    *   **Database:** **SQLite** with the **`aiosqlite`** driver for non-blocking database access.
-    *   **Concurrency:** Robust handling of concurrent requests using `asyncio.Lock` to ensure thread-safe database writes.
-    *   **AI Integration:** Google Generative AI (`gemini`), **Ollama**
-    *   **Async HTTP:** `httpx` for all external API calls.
+    *   **Architecture:** **Service Layer + Repository Pattern**
+    *   **Database:** **SQLite** with `aiosqlite` for non-blocking access.
 *   **Frontend:**
-    *   **Structure:** Vanilla JavaScript with a modern **Object-Oriented (OOP)** class-based design.
-    *   **Visualization:** **Cytoscape.js** for the interactive graph canvas.
-    *   **File Serving:** Simple Python `http.server` for development.
-
-## 🏗️ Architectural Refactor
-
-The backend was recently refactored from a procedural style to a robust, object-oriented **Service Layer** and **Repository Pattern**. This major overhaul was undertaken to:
-- **Improve Maintainability:** By separating business logic (Services) from data access (Repositories), the codebase is now significantly easier to understand, debug, and extend.
-- **Enhance Performance & Stability:** The entire backend was converted to be fully asynchronous, from API endpoints down to the database. This involved:
-    - Migrating from `sqlite3` to `aiosqlite` to prevent I/O blocking.
-    - Implementing `async/await` throughout the entire call stack.
-    - Using `fastapi.concurrency.run_in_threadpool` to safely handle synchronous third-party libraries.
-- **Solve Concurrency Issues:** Critical bugs related to SQLite's `database is locked` errors during concurrent streaming were resolved by adopting a per-operation connection model and using `asyncio.Lock` for all database writes.
+    *   **Structure:** Vanilla JavaScript with a modern Object-Oriented (OOP) class-based design.
+    *   **Visualization:** **Cytoscape.js** for the interactive graph canvases.
+    *   **UI Components:** **Tippy.js** for interactive node tooltips.
 
 ## 🚀 Getting Started
 
@@ -51,108 +57,98 @@ Follow these steps to get the application running on your local machine.
 
 *   Python 3.10+
 *   An active Google Gemini API Key (get one from [Google AI Studio](https://aistudio.google.com/app/apikey)).
-*   (Optional) An instance of [Ollama](https://ollama.com/) running, with at least one model pulled (e.g., `ollama pull llama3`).
-
+*   (Optional) An instance of [Ollama](https://ollama.com/) running.
 
 ### 1. Clone the Repository
-    ```bash
-    git clone <your-repository-url>
-    cd brainstorming_app
+```bash
+git clone <your-repository-url>
+cd brainstorming-app
+```
 
-2. Set Up the Backend
-    The backend runs the API server and connects to the database and AI services.
-    
-    Bash
-    # Create a Python virtual environment in the root directory
-    python -m venv venv
+### 2. Set Up the Backend
+```bash
+# Create and activate a Python virtual environment
+python -m venv venv
+# On Windows: .\venv\Scripts\activate
+# On macOS/Linux: source venv/bin/activate
 
-    # Activate the virtual environment
-    # On Windows (PowerShell):
-    .\venv\Scripts\activate
-    # On macOS/Linux:
-    source venv/bin/activate
+# Install dependencies
+pip install -r backend/requirements.txt
+```
 
-    # Install the required Python packages
-    pip install -r backend/requirements.txt
+### 3. Configure Environment Variables
+In the root `brainstorming-app` directory, create a file named `.env` and add your API key.
+```dotenv
+# .env
+GOOGLE_API_KEY="your_google_api_key_here"
+```
 
-3. Configure Environment Variables
-    In the root brainstorming_app directory, create a file named .env. Add your Google Gemini API key to this file.
-    
-    Dotenv
-    # .env
-    GOOGLE_API_KEY="AIza..."
-4. Run the Application
-    You need to run two servers in two separate terminals from the root brainstorming_app directory.
-    Terminal 1: Start the Backend (API Server)
-    (Make sure your virtual environment is active)
-    
-    Bash
-    # From the root project directory
-    python run.py
-    This will start the FastAPI server on http://127.0.0.1:8000.
-    Terminal 2: Start the Frontend (Web Server)
-    
-    Bash
-    # From the root project directory
-    python -m http.server 5500 --directory frontend
-    This will start a simple web server for the user interface.
-5. Access the Application
-    Open your web browser and navigate to:
-    http://127.0.0.1:5500
-    You should see the AI Brainstorming Canvas, ready to use!
-    ⚙️ Configuration
-    Click the gear icon (⚙️) in the bottom-left corner to open the Settings modal.
-    Google Gemini: Ensure the API key is entered here if you didn't use the .env file.
-    Custom Endpoint (Ollama/RunPod):
-    Select "Custom Endpoint" from the provider dropdown.
-    Enter the base URL of your running Ollama instance (e.g., http://localhost:11434).
-    Click the "Refresh" button (🔄) to fetch the list of available models.
-    Select a default model from the dropdown.
-    Click "Save Settings".
+### 4. Run the Application
+You need to run two servers in two separate terminals from the root project directory.
 
+**Terminal 1: Start the Backend (FastAPI)**
+```bash
+# (Make sure your virtual environment is active and you are in root directory, the server will run the app from backend/ folder)
+uvicorn backend.main:app 
+```
+The API server will start on `http://127.0.0.1:8000`.
 
-📂 New Project Structure
-    The refactored backend now has a clear and maintainable structure.
+**Terminal 2: Start the Frontend (Web Server)**
+```bash
+python -m http.server 5500 --directory frontend
+```
 
-    brainstorming_app/
-    ├── .env
-    ├── .gitignore
-    ├── README.md
-    ├── run.py                # Main script to run the backend
-    ├── venv/                   # Python virtual environment
+### 5. Access the Application
+Open your web browser and navigate to:
+**`http://127.0.0.1:5500`**
+
+## 📂 Project Structure
+
+```
+brainstorming-app/
+├── .env
+├── README.md
+├── run.py                # Main script to run the backend
+├── venv/
+│
+├── backend/
+│   ├── config.py           # Centralized configuration
+│   ├── main.py             # FastAPI app assembly
+│   ├── schemas.py          # Pydantic data models
+│   ├── dependencies.py     # FastAPI dependency injection
+│   │
+│   ├── data_access/
+│   │   └── connection.py   # Database initialization and schema
+│   │
+│   ├── repositories/       # REPOSITORY LAYER (Data Access)
+│   │   ├── chat_repository.py
+│   │   └── graph_repository.py
+│   │
+│   ├── services/           # SERVICE LAYER (Business Logic)
+│   │   ├── chat_service.py
+│   │   ├── graph_service.py
+│   │   └── llm_service.py
+│   │
+│   ├── routers/            # ROUTER LAYER (API Endpoints)
+│   │   ├── chat.py
+│   │   ├── files.py
+│   │   └── graph.py
+│   │
+│   └── requirements.txt
+│
+└── frontend/
+    ├── js/
+    │   ├── components/
+    │   │   ├── GraphManager.js
+    │   │   ├── IdeaWorkspace.js
+    │   │   └── SettingsModal.js
+    │   │
+    │   ├── services/
+    │   │   └── ApiService.js
+    │   │
+    │   └── App.js          # Main application class and logic
     │
-    ├── backend/
-    │   ├── __init__.py
-    │   ├── config.py           # Centralized configuration (paths, keys)
-    │   ├── main.py             # FastAPI app assembly and lifespan events
-    │   ├── schemas.py          # Pydantic data models
-    │   ├── dependencies.py     # FastAPI dependency injection providers
-    │   │
-    │   ├── data_access/
-    │   │   └── connection.py   # Manages DB initialization
-    │   │
-    │   ├── repositories/       # REPOSITORY LAYER (Data Access)
-    │   │   ├── chat_repository.py
-    │   │   ├── graph_repository.py
-    │   │   └── settings_repository.py
-    │   │
-    │   ├── services/           # SERVICE LAYER (Business Logic)
-    │   │   ├── chat_service.py
-    │   │   ├── graph_service.py
-    │   │   ├── llm_service.py
-    │   │   └── settings_service.py
-    │   │
-    │   ├── routers/            # ROUTER LAYER (API Endpoints)
-    │   │   ├── chat.py
-    │   │   ├── files.py
-    │   │   ├── graph.py
-    │   │   ├── ollama.py
-    │   │   └── settings.py
-    │   │
-    │   └── requirements.txt
-    │
-    └── frontend/
-        ├── js/
-        ├── uploads/
-        ├── index.html
-        └── style.css
+    ├── uploads/            # Directory for uploaded images
+    ├── index.html
+    └── style.css
+```
