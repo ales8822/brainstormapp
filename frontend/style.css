@@ -497,14 +497,24 @@ h3 {
   cursor: pointer;
   padding: 10px;
   background-color: #2d2d2d;
+  border: 1px solid #444;
+  color: #ecf0f1;
   border-radius: 50%;
   width: 30px;
   height: 30px;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
   z-index: 100;
+  transition: all 0.5s ease;
+}
+
+.settings-icon:hover {
+  background-color: #3d3d3d;
+  transform: rotate(180deg);
+  box-shadow: 0 6px 15px rgba(0, 0, 0, 0.5);
+  border-color: #3498db;
 }
 
 .setting-item {
