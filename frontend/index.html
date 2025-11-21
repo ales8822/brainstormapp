@@ -196,6 +196,31 @@
 
         <button id="start-meeting-btn" class="action-btn" disabled>Start Meeting</button>
       </div>
+
+      <div id="meeting-in-progress-panel" class="meeting-in-progress-panel" style="display: none;">
+         <div class="meeting-controls-panel">
+            <h3>Meeting Controls</h3>
+            <div class="control-group">
+               <label>Current Topic:</label>
+               <p id="active-meeting-topic" class="topic-display"></p>
+            </div>
+            <!-- Placeholder for future controls -->
+            <div class="control-group">
+               <button id="pause-meeting-btn" class="secondary-btn">Pause Meeting</button>
+               <button id="end-meeting-btn" class="danger-btn">End Meeting</button>
+            </div>
+         </div>
+         
+         <div class="meeting-transcript-panel">
+            <div class="transcript-header">
+               <h3>Meeting Transcript</h3>
+            </div>
+            <div id="meeting-transcript" class="chat-messages">
+               <!-- Transcript messages will appear here -->
+            </div>
+            <!-- We might add a manual input here later -->
+         </div>
+      </div>
     </div>
   </main>
   <!-- === END: MEETING BOARD VIEW === -->

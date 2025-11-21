@@ -101,6 +101,13 @@ class App {
     this.meetingAgentMenu = document.getElementById("meeting-agent-menu");
     this.meetingAgentMenuList = document.getElementById("meeting-agent-menu-list");
 
+    // --- MEETING IN PROGRESS REFS ---
+    this.meetingInProgressPanel = document.getElementById("meeting-in-progress-panel");
+    this.activeMeetingTopic = document.getElementById("active-meeting-topic");
+    this.meetingTranscript = document.getElementById("meeting-transcript");
+    this.pauseMeetingBtn = document.getElementById("pause-meeting-btn");
+    this.endMeetingBtn = document.getElementById("end-meeting-btn");
+
     this.meetingAgents = {}; // { chairIndex: agentName }
 
     // --- DOM REFS FOR INSPECTOR ---
@@ -322,6 +329,54 @@ class App {
     this.setContextBtn.addEventListener("click", () =>
       this.handleSetContext()
     );
+    
+    this.startMeetingBtn.addEventListener("click", () => 
+      this.handleStartMeeting()
+    );
+    
+    this.endMeetingBtn.addEventListener("click", () =>
+      this.handleEndMeeting()
+    );
+  }
+
+  handleStartMeeting() {
+    console.log("Starting Meeting...");
+    this.boardAssemblyPanel.style.display = "none";
+    this.meetingInProgressPanel.style.display = "flex";
+    
+    this.activeMeetingTopic.textContent = this.displayTopic.textContent;
+    this.meetingTranscript.innerHTML = ""; // Clear transcript
+    
+    // TODO: Trigger AI conversation
+    this.appendMeetingMessage("system", "The meeting has started.");
+  }
+  
+  handleEndMeeting() {
+     if(confirm("Are you sure you want to end the meeting?")) {
+        this.meetingInProgressPanel.style.display = "none";
+        this.briefingPanel.style.display = "block"; // Go back to start
+        // Reset state if needed
+     }
+  }
+  
+  appendMeetingMessage(role, text, agentName = null) {
+     const msg = document.createElement("div");
+     msg.className = `chat-message ${role}`;
+     
+     if (agentName) {
+        const header = document.createElement("div");
+        header.className = "message-header";
+        header.textContent = agentName;
+        msg.appendChild(header);
+     }
+     
+     const content = document.createElement("span");
+     content.className = "message-content";
+     content.textContent = text;
+     msg.appendChild(content);
+     
+     this.meetingTranscript.appendChild(msg);
+     this.meetingTranscript.scrollTop = this.meetingTranscript.scrollHeight;
   }
 
   handleSetContext() {
