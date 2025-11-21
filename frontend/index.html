@@ -155,7 +155,25 @@
       <h2>Meeting Board</h2>
     </div>
     <div class="meeting-board-content">
-      <p style="text-align: center; margin-top: 50px; color: #666;">Meeting Board Placeholder</p>
+      <div class="briefing-panel">
+        <h3>Chairman's Briefing</h3>
+        <p class="briefing-intro">Define the context for this session. This will guide the AI board members.</p>
+
+        <div class="briefing-form">
+          <div class="form-group">
+            <label for="meeting-topic">Meeting Topic / Agenda</label>
+            <textarea id="meeting-topic" placeholder="e.g., Q4 Marketing Strategy, New Product Launch..."></textarea>
+          </div>
+
+          <div class="form-group">
+            <label for="company-context">Company Context / Background</label>
+            <textarea id="company-context"
+              placeholder="e.g., We are a mid-sized tech company facing stiff competition..."></textarea>
+          </div>
+
+          <button id="set-context-btn" class="action-btn">Set Context & Assemble Board</button>
+        </div>
+      </div>
     </div>
   </main>
   <!-- === END: MEETING BOARD VIEW === -->

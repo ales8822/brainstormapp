@@ -87,6 +87,11 @@ class App {
     this.meetingBoardView = document.getElementById("meeting-board-view");
     this.backToOverviewButton = document.getElementById("back-to-overview-btn");
 
+    // --- BRIEFING PANEL REFS ---
+    this.meetingTopicInput = document.getElementById("meeting-topic");
+    this.companyContextInput = document.getElementById("company-context");
+    this.setContextBtn = document.getElementById("set-context-btn");
+
     // --- DOM REFS FOR INSPECTOR ---
     this.inspectorPanel = document.getElementById("workspace-inspector-panel");
 
@@ -302,6 +307,27 @@ class App {
     this.backToOverviewButton.addEventListener("click", () =>
       this.exitMeetingBoard()
     );
+
+    this.setContextBtn.addEventListener("click", () =>
+      this.handleSetContext()
+    );
+  }
+
+  handleSetContext() {
+    const topic = this.meetingTopicInput.value.trim();
+    const context = this.companyContextInput.value.trim();
+
+    if (!topic) {
+      alert("Please enter a meeting topic.");
+      return;
+    }
+
+    console.log("Setting Context:");
+    console.log("Topic:", topic);
+    console.log("Context:", context);
+
+    // TODO: Transition to Assemble Board phase
+    alert("Context set! (Check console for details)");
   }
 
   enterMeetingBoard() {
