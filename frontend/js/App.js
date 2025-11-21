@@ -82,6 +82,11 @@ class App {
     this.edgeModeIndicator = document.getElementById("edge-mode-indicator");
     this.layoutControls = document.getElementById("layout-controls");
 
+    // --- MEETING BOARD REFS ---
+    this.newMeetingButton = document.getElementById("new-meeting-button");
+    this.meetingBoardView = document.getElementById("meeting-board-view");
+    this.backToOverviewButton = document.getElementById("back-to-overview-btn");
+
     // --- DOM REFS FOR INSPECTOR ---
     this.inspectorPanel = document.getElementById("workspace-inspector-panel");
 
@@ -289,6 +294,29 @@ class App {
       }
     });
     // Close popover if clicking outside (handled by canvas click)
+
+    // Meeting Board Listeners
+    this.newMeetingButton.addEventListener("click", () =>
+      this.enterMeetingBoard()
+    );
+    this.backToOverviewButton.addEventListener("click", () =>
+      this.exitMeetingBoard()
+    );
+  }
+
+  enterMeetingBoard() {
+    console.log("Entering Meeting Board...");
+    this.overviewView.style.display = "none";
+    this.workspaceView.style.display = "none";
+    this.meetingBoardView.style.display = "flex";
+  }
+
+  exitMeetingBoard() {
+    console.log("Exiting Meeting Board...");
+    this.meetingBoardView.style.display = "none";
+    this.overviewView.style.display = "flex";
+    // Ensure workspace is hidden just in case
+    this.workspaceView.style.display = "none";
   }
 
   async enterWorkspace(node) {

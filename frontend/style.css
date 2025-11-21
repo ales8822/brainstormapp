@@ -1085,3 +1085,83 @@ h3 {
   font-size: 14px;
   line-height: 1;
 }
+
+/* Meeting Board Styles */
+.meeting-icon {
+  position: absolute;
+  bottom: 20px;
+  left: 80px;
+  /* Positioned next to settings icon */
+  font-size: 24px;
+  cursor: pointer;
+  padding: 10px;
+  background-color: #2d2d2d;
+  border: 1px solid #444;
+  color: #ecf0f1;
+  border-radius: 50%;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+  z-index: 100;
+  transition: all 0.3s ease;
+}
+
+.meeting-icon:hover {
+  background-color: #3d3d3d;
+  transform: scale(1.1);
+  box-shadow: 0 6px 15px rgba(0, 0, 0, 0.5);
+  border-color: #3498db;
+}
+
+.meeting-board-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background-color: #121212;
+  z-index: 2000;
+  /* Above everything else */
+  display: flex;
+  flex-direction: column;
+}
+
+.meeting-board-header {
+  padding: 20px;
+  background-color: #1e1e1e;
+  border-bottom: 1px solid #333;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.meeting-board-header h2 {
+  margin: 0;
+  color: #ecf0f1;
+}
+
+.back-btn {
+  background: none;
+  border: 1px solid #444;
+  color: #bdc3c7;
+  padding: 8px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.2s;
+}
+
+.back-btn:hover {
+  background-color: #333;
+  color: #fff;
+  border-color: #666;
+}
+
+.meeting-board-content {
+  flex-grow: 1;
+  padding: 20px;
+  overflow: auto;
+}

@@ -28,6 +28,7 @@
       </div>
       <div class="loader" id="loader" style="display: none"></div>
       <div id="settings-button" class="settings-icon">⚙️</div>
+      <div id="new-meeting-button" class="meeting-icon" title="New Meeting">📅</div>
       <div id="active-model-display">Active AI: Loading...</div>
     </div>
     <div id="cy"></div>
@@ -146,6 +147,18 @@
     </div>
   </main>
   <!-- === END: WORKSPACE VIEW === -->
+
+  <!-- === NEW: MEETING BOARD VIEW === -->
+  <main id="meeting-board-view" class="meeting-board-container" style="display: none">
+    <div class="meeting-board-header">
+      <button id="back-to-overview-btn" class="back-btn">← Back to Overview</button>
+      <h2>Meeting Board</h2>
+    </div>
+    <div class="meeting-board-content">
+      <p style="text-align: center; margin-top: 50px; color: #666;">Meeting Board Placeholder</p>
+    </div>
+  </main>
+  <!-- === END: MEETING BOARD VIEW === -->
 
   <!-- === SETTINGS MODAL === -->
   <div id="settings-modal" class="modal-overlay" style="display: none">
