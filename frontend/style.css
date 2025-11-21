@@ -1626,3 +1626,65 @@ h3 {
   color: #95a5a6;
   font-style: italic;
 }
+
+/* Secretary Chat Section */
+.secretary-chat-section {
+  border-top: 1px solid #333;
+  padding: 20px;
+  background-color: #252525;
+}
+
+.secretary-chat-messages {
+  max-height: 200px;
+  overflow-y: auto;
+  margin-bottom: 15px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.secretary-chat-message {
+  padding: 10px;
+  border-radius: 6px;
+  line-height: 1.4;
+}
+
+.secretary-chat-message.user {
+  background-color: #2d4a7c;
+  color: #ecf0f1;
+  align-self: flex-end;
+  max-width: 80%;
+}
+
+.secretary-chat-message.assistant {
+  background-color: #2d2d2d;
+  color: #ecf0f1;
+  align-self: flex-start;
+  max-width: 80%;
+  border-left: 3px solid #3498db;
+}
+
+.secretary-chat-input-container {
+  display: flex;
+  gap: 10px;
+}
+
+#secretary-query-input {
+  flex-grow: 1;
+  padding: 10px;
+  border: 1px solid #444;
+  border-radius: 6px;
+  background-color: #2d2d2d;
+  color: #ecf0f1;
+  font-size: 14px;
+}
+
+#secretary-query-input:focus {
+  outline: none;
+  border-color: #3498db;
+}
+
+#send-secretary-query-btn {
+  padding: 10px 20px;
+  white-space: nowrap;
+}

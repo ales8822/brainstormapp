@@ -114,6 +114,11 @@ class App {
     this.promoteMinutesBtn = document.getElementById("promote-minutes-btn");
     this.exportMinutesBtn = document.getElementById("export-minutes-btn");
 
+    // 
+    this.secretaryChatMessages = document.getElementById("secretary-chat-messages");
+    this.secretaryQueryInput = document.getElementById("secretary-query-input");
+    this.sendSecretaryQueryBtn = document.getElementById("send-secretary-query-btn");
+
     this.meetingAgents = {}; // { chairIndex: agentName }
     this.currentMeetingMinutes = ""; // Store minutes for export/promote
 
@@ -348,6 +353,16 @@ class App {
     this.promoteMinutesBtn.addEventListener("click", () =>
       this.handlePromoteMinutes()
     );
+    this.sendSecretaryQueryBtn.addEventListener("click", () =>
+      this.handleSecretaryQuery()
+    );
+
+    // Also add Enter key support
+    this.secretaryQueryInput.addEventListener("keypress", (e) => {
+      if (e.key === "Enter") {
+        this.handleSecretaryQuery();
+      }
+    });
 
     this.exportMinutesBtn.addEventListener("click", () =>
       this.handleExportMinutes()
@@ -507,6 +522,61 @@ class App {
     URL.revokeObjectURL(url);
 
     alert(`Minutes exported as ${filename}`);
+  }
+
+  async handleSecretaryQuery() {
+    const query = this.secretaryQueryInput.value.trim();
+
+    if (!query) {
+      return;
+    }
+
+    if (!this.currentMeetingMinutes) {
+      alert("No meeting minutes available to query.");
+      return;
+    }
+
+    // Display user's question
+    this.appendSecretaryMessage("user", query);
+
+    // Clear input
+    this.secretaryQueryInput.value = "";
+
+    // Show loading indicator
+    const loadingMsg = this.appendSecretaryMessage("assistant", "Thinking...");
+    loadingMsg.classList.add("thinking");
+
+    try {
+      const payload = {
+        topic: this.meetingTopicInput.value.trim(),
+        company_context: this.companyContextInput.value.trim(),
+        minutes: this.currentMeetingMinutes,
+        query: query
+      };
+
+      const data = await this.api.querySecretary(payload);
+
+      // Remove loading message
+      loadingMsg.remove();
+
+      // Display secretary's response
+      this.appendSecretaryMessage("assistant", data.response);
+
+    } catch (error) {
+      loadingMsg.remove();
+      this.appendSecretaryMessage("assistant", `Error: ${error.message}`);
+    }
+  }
+
+  appendSecretaryMessage(role, text) {
+    const msg = document.createElement("div");
+    msg.className = `secretary-chat-message ${role}`;
+    msg.textContent = text;
+
+    this.secretaryChatMessages.appendChild(msg);
+    this.secretaryChatMessages.scrollTop = this.secretaryChatMessages.scrollHeight;
+
+    return msg; // Return for potential removal (loading indicator)
   }
 
   appendMeetingMessage(role, text, agentName = null) {

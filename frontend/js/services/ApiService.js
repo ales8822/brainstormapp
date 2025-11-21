@@ -257,4 +257,24 @@ class ApiService {
       }
     }
   }
+
+  async querySecretary(payload) {
+    try {
+      const response = await fetch(`${this.baseUrl}/meetings/query-secretary`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Server error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error("Query secretary API call failed:", error);
+      throw error;
+    }
+  }
 }

@@ -6,7 +6,7 @@ from ..dependencies import get_llm_service
 import asyncio
 import json
 
-router = APIRouter(prefix="/meetings", tags=["meetings"])
+router = APIRouter(prefix="/api/meetings", tags=["meetings"])
 
 # Hardcoded personas for now
 PERSONAS = {
