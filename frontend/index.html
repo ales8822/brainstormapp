@@ -129,6 +129,20 @@
           <button type="submit">Send</button>
         </form>
       </div>
+      <div id="node-creation-popover" class="node-creation-popover" style="display: none;">
+        <textarea id="popover-text" placeholder="Enter node label..."></textarea>
+        <div class="popover-controls">
+          <div class="popover-actions">
+            <button id="popover-attach-btn" class="icon-btn" title="Attach Image">📎</button>
+            <input type="file" id="popover-file-input" accept="image/*" style="display: none;" />
+          </div>
+          <button id="popover-create-btn" class="primary-btn">Create</button>
+        </div>
+        <div id="popover-preview-container" style="display: none;">
+          <img id="popover-preview-image" src="" />
+          <button id="popover-remove-file">×</button>
+        </div>
+      </div>
     </div>
   </main>
   <!-- === END: WORKSPACE VIEW === -->

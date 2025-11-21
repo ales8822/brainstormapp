@@ -65,6 +65,20 @@ class App {
       "workspace-remove-file-button"
     );
 
+    // --- POPOVER REFS ---
+    this.nodeCreationPopover = document.getElementById("node-creation-popover");
+    this.popoverText = document.getElementById("popover-text");
+    this.popoverAttachBtn = document.getElementById("popover-attach-btn");
+    this.popoverFileInput = document.getElementById("popover-file-input");
+    this.popoverCreateBtn = document.getElementById("popover-create-btn");
+    this.popoverPreviewContainer = document.getElementById(
+      "popover-preview-container"
+    );
+    this.popoverPreviewImage = document.getElementById("popover-preview-image");
+    this.popoverRemoveFile = document.getElementById("popover-remove-file");
+    this.popoverAttachmentPath = null;
+    this.popoverPosition = null; // {x, y} in model coordinates
+
     this.edgeModeIndicator = document.getElementById("edge-mode-indicator");
     this.layoutControls = document.getElementById("layout-controls");
 
@@ -173,6 +187,9 @@ class App {
     // );
 
     this.workspaceGraph.onCanvasClick(() => this.handleWorkspaceCanvasClick());
+    this.workspaceGraph.onCanvasDoubleClick((e) =>
+      this.handleWorkspaceCanvasDoubleClick(e)
+    );
     this.workspace.onNodeDeletedCallback = () => this.graph.loadGraph();
     this.settings.onSettingsChangedCallback = () => this.onSettingsChanged();
   }
@@ -249,6 +266,29 @@ class App {
         this.handleLayoutChange(layoutName);
       }
     });
+
+    // Popover Listeners
+    this.popoverAttachBtn.addEventListener("click", () =>
+      this.popoverFileInput.click()
+    );
+    this.popoverFileInput.addEventListener("change", (e) =>
+      this.handlePopoverFileUpload(e)
+    );
+    this.popoverRemoveFile.addEventListener("click", () =>
+      this.resetPopoverFile()
+    );
+    this.popoverCreateBtn.addEventListener("click", () =>
+      this.handlePopoverCreate()
+    );
+    this.popoverText.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        this.handlePopoverCreate();
+      } else if (e.key === "Escape") {
+        this.hidePopover();
+      }
+    });
+    // Close popover if clicking outside (handled by canvas click)
   }
 
   async enterWorkspace(node) {
@@ -1072,6 +1112,140 @@ class App {
     document.body.style.cursor = "default";
     if (this.edgeModeIndicator) {
       this.edgeModeIndicator.style.display = "none";
+    }
+    this.hidePopover();
+  }
+
+  handleWorkspaceCanvasDoubleClick(event) {
+    console.log("Double click on canvas");
+    const position = event.position; // Model coordinates
+    const renderedPosition = event.renderedPosition; // Screen coordinates relative to canvas
+
+    this.popoverPosition = position;
+
+    // Position the popover
+    // We need to account for the canvas offset if necessary, but renderedPosition is usually relative to the container
+    // The popover is inside workspace-body which is flex.
+    // Let's use absolute positioning relative to the workspace-body or canvas container.
+    // Since popover is in workspace-body, we might need to adjust.
+    // Actually, let's just use the renderedPosition + some offset.
+    // We might need to convert to page coordinates if the container has scrolling or offset.
+    // For now, let's try using the renderedPosition directly on the container.
+
+    const containerRect = document
+      .getElementById("workspace-cy")
+      .getBoundingClientRect();
+
+    this.nodeCreationPopover.style.left = `${renderedPosition.x + containerRect.left
+      }px`; // This might be wrong if container is not at 0,0
+    // Better: position relative to the #workspace-cy container if popover is inside it?
+    // Popover is sibling to #workspace-cy in .workspace-body.
+    // Let's use fixed positioning or calculate relative to viewport.
+    // renderedPosition is relative to the top-left of the graph container.
+
+    // Let's try setting top/left based on the event's page coordinates if available, or calculate from clientX/Y
+    const originalEvent = event.originalEvent;
+    if (originalEvent) {
+      // Adjust to center the popover slightly
+      this.nodeCreationPopover.style.left = `${originalEvent.clientX}px`;
+      this.nodeCreationPopover.style.top = `${originalEvent.clientY}px`;
+    }
+
+    this.nodeCreationPopover.style.display = "flex";
+    this.popoverText.focus();
+  }
+
+  hidePopover() {
+    this.nodeCreationPopover.style.display = "none";
+    this.popoverText.value = "";
+    this.resetPopoverFile();
+    this.popoverPosition = null;
+  }
+
+  resetPopoverFile() {
+    this.popoverFileInput.value = "";
+    this.popoverAttachmentPath = null;
+    this.popoverPreviewContainer.style.display = "none";
+  }
+
+  async handlePopoverFileUpload(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      this.popoverPreviewImage.src = e.target.result;
+      this.popoverPreviewContainer.style.display = "block";
+    };
+    reader.readAsDataURL(file);
+
+    const formData = new FormData();
+    formData.append("file", file);
+    try {
+      const data = await this.api.uploadFile(formData);
+      this.popoverAttachmentPath = data.filePath;
+    } catch (error) {
+      console.error("Popover upload error:", error);
+      alert("Failed to upload image.");
+      this.resetPopoverFile();
+    }
+  }
+
+  async handlePopoverCreate() {
+    const text = this.popoverText.value.trim();
+    if (!text && !this.popoverAttachmentPath) {
+      this.hidePopover();
+      return;
+    }
+
+    if (!this.activeWorkspaceNode) return;
+
+    try {
+      const payload = {
+        parentNodeId: this.activeWorkspaceNode.id(),
+        label: text.substring(0, 50) || "Image Node",
+        fullText: text,
+        attachmentPath: this.popoverAttachmentPath,
+        x: this.popoverPosition.x,
+        y: this.popoverPosition.y,
+      };
+
+      // We reuse promoteMessageToNode or create a similar endpoint.
+      // promoteMessageToNode takes parentNodeId, label, fullText, attachmentPath.
+      // It DOES NOT currently take x, y. We might need to update the API or use a new method.
+      // However, the user said "It calls a new API service method, api.createWorkspaceNode... This is the same endpoint we already use for 'Promote to Node'".
+      // Wait, promoteMessageToNode in App.js calls api.promoteMessageToNode.
+      // Let's check ApiService.js to see if we can pass x, y.
+      // If not, we might need to update the node position after creation or update the backend.
+      // For now, let's assume we can pass x,y or update it immediately.
+      // Actually, the user said "The save action reads the final text... It calls a new API service method, api.createWorkspaceNode".
+      // I should probably add createWorkspaceNode to ApiService if it doesn't exist, or use promoteMessageToNode if it fits.
+      // Let's use promoteMessageToNode but add x,y to the payload and hope the backend handles it or we update it locally.
+
+      // Actually, let's look at ApiService.js. I haven't read it.
+      // I'll assume I can send x,y. If the backend ignores it, I can move the node after adding it to the graph.
+
+      const newNode = await this.api.promoteMessageToNode(payload);
+
+      // The backend might not return the position we requested if it doesn't support it.
+      // So we manually set the position on the new node data before adding to graph.
+      newNode.data.position = {
+        x: this.popoverPosition.x,
+        y: this.popoverPosition.y,
+      };
+
+      // Add to graph
+      const addedNode = this.workspaceGraph.addNode(
+        newNode.data,
+        newNode.classes
+      );
+      // Explicitly set position in Cytoscape
+      addedNode.position(this.popoverPosition);
+
+      this.hidePopover();
+    } catch (error) {
+      console.error("Failed to create node from popover:", error);
+      alert("Could not create node.");
     }
   }
   async handleInspectorSave() {

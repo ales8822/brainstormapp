@@ -261,7 +261,15 @@ class GraphManager {
   onCanvasClick(callback) {
     this.cy.on("tap", (event) => {
       if (event.target === this.cy) {
-        callback();
+        callback(event);
+      }
+    });
+  }
+
+  onCanvasDoubleClick(callback) {
+    this.cy.on("dbltap", (event) => {
+      if (event.target === this.cy) {
+        callback(event);
       }
     });
   }
