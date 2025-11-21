@@ -226,6 +226,26 @@ class GraphManager {
     this.cy.layout({ name: "cose", animate: true, padding: 50 }).run();
   }
 
+  setLayout(layoutName) {
+    console.log(`GraphManager: Switching layout to ${layoutName}`);
+    const layoutConfig = {
+      name: layoutName,
+      animate: true,
+      padding: 50,
+      animationDuration: 500,
+    };
+
+    // Specific tweaks for certain layouts
+    if (layoutName === "breadthfirst") {
+      layoutConfig.directed = true;
+      layoutConfig.spacingFactor = 1.5;
+    } else if (layoutName === "circle") {
+      layoutConfig.radius = 200; // Approximate radius
+    }
+
+    this.cy.layout(layoutConfig).run();
+  }
+
   onNodeClick(callback) {
     this.cy.on("tap", "node", (event) => {
       callback(event.target);

@@ -66,6 +66,7 @@ class App {
     );
 
     this.edgeModeIndicator = document.getElementById("edge-mode-indicator");
+    this.layoutControls = document.getElementById("layout-controls");
 
     // --- DOM REFS FOR INSPECTOR ---
     this.inspectorPanel = document.getElementById("workspace-inspector-panel");
@@ -239,6 +240,15 @@ class App {
     this.inspectorSaveButton.addEventListener("click", () =>
       this.handleInspectorSave()
     );
+
+    // Layout Controls Listener
+    this.layoutControls.addEventListener("click", (e) => {
+      const btn = e.target.closest(".layout-btn");
+      if (btn) {
+        const layoutName = btn.dataset.layout;
+        this.handleLayoutChange(layoutName);
+      }
+    });
   }
 
   async enterWorkspace(node) {
@@ -1129,6 +1139,12 @@ class App {
         btn.classList.remove("active");
       }
     });
+  }
+
+  handleLayoutChange(layoutName) {
+    if (this.workspaceGraph) {
+      this.workspaceGraph.setLayout(layoutName);
+    }
   }
 }
 
