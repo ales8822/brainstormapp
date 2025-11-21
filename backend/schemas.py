@@ -57,3 +57,9 @@ class MeetingRequest(BaseModel):
     topic: str
     company_context: str
     agents: List[str]
+
+class SecretaryQueryRequest(BaseModel):
+    topic: str
+    company_context: str
+    minutes: str
+    query: str

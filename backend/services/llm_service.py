@@ -316,4 +316,29 @@ class LLMService:
             minutes = await self._get_gemini_chat([], user_message, system_prompt)
             return minutes
         except Exception as e:
-            return f"# Meeting Minutes\n\n**Error generating minutes**: {str(e)}\n\n## Raw Transcript\n\n{transcript_text}"
+            return f"# Meeting Minutes\n\n**Error generating minutes**: {str(e)}\n\n## Raw Transcript\n\n{transcript_text}" 
+ 
+    async def query_secretary(self, topic: str, company_context: str, minutes: str, query: str) -> str:
+        \"\"\"
+        Answer follow-up questions about the meeting minutes.
+        \"\"\"
+        system_prompt = f\"\"\"
+        You are an AI Executive Secretary who has access to the meeting minutes.
+        
+        Meeting Topic: {topic}
+        Company Context: {company_context}
+        
+        Meeting Minutes:
+        {minutes}
+        
+        Your task is to answer questions about the meeting based on the minutes above.
+        Provide clear, concise, and helpful responses. Reference specific sections of the minutes when relevant.
+        If the question cannot be answered from the minutes, politely explain what information is missing.
+        \"\"\"
+        
+        # Use Gemini for intelligent Q&A
+        try:
+            response = await self._get_gemini_chat([], query, system_prompt)
+            return response
+        except Exception as e:
+            return f\"I apologize, but I encountered an error: {str(e)}\"

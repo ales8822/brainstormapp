@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
-from ..schemas import MeetingRequest
+from ..schemas import MeetingRequest, SecretaryQueryRequest
 from ..services.llm_service import LLMService
 from ..dependencies import get_llm_service
 import asyncio
@@ -87,3 +87,21 @@ async def run_meeting(request: MeetingRequest, llm_service: LLMService = Depends
         yield json.dumps({"agent_name": "system", "response_text": "Meeting adjourned."}) + "\n"
 
     return StreamingResponse(stream_generator(), media_type="application/x-ndjson")
+
+@router.post("/query-secretary")
+async def query_secretary(request: SecretaryQueryRequest, llm_service: LLMService = Depends(get_llm_service)):
+    """
+    Answer follow-up questions about the meeting minutes.
+    """
+    try:
+        response = await llm_service.query_secretary(
+            topic=request.topic,
+            company_context=request.company_context,
+            minutes=request.minutes,
+            query=request.query
+        )
+        
+        return {"response": response}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
