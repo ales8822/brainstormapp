@@ -57,6 +57,7 @@ class MeetingRequest(BaseModel):
     topic: str
     company_context: str
     agents: List[str]
+    attachment_path: Optional[str] = None
 
 class SecretaryQueryRequest(BaseModel):
     topic: str

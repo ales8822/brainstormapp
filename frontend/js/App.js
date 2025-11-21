@@ -92,6 +92,8 @@ class App {
     this.companyContextInput = document.getElementById("company-context");
     this.setContextBtn = document.getElementById("set-context-btn");
     this.briefingPanel = document.getElementById("briefing-panel");
+    this.meetingAttachmentInput = document.getElementById("meeting-attachment");
+    this.meetingAttachmentPreview = document.getElementById("meeting-attachment-preview");
 
     // --- BOARD ASSEMBLY REFS ---
     this.boardAssemblyPanel = document.getElementById("board-assembly-panel");
@@ -346,7 +348,11 @@ class App {
       this.handleStartMeeting()
     );
 
-    this.endMeetingBtn.addEventListener("click", () =>
+    this.meetingAttachmentInput.addEventListener("change", (e) =>
+      this.handleMeetingAttachment(e)
+    );
+
+    this.pauseMeetingBtn.addEventListener("click", () =>
       this.handleEndMeeting()
     );
 
@@ -369,7 +375,22 @@ class App {
     );
   }
 
-  handleStartMeeting() {
+  handleMeetingAttachment(e) {
+    const file = e.target.files[0];
+    if (!file) {
+      this.meetingAttachmentPreview.innerHTML = "";
+      return;
+    }
+
+    // Show preview
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      this.meetingAttachmentPreview.innerHTML = `<img src="${e.target.result}" alt="Preview" />`;
+    };
+    reader.readAsDataURL(file);
+  }
+
+  async handleStartMeeting() {
     console.log("Starting Meeting...");
     this.boardAssemblyPanel.style.display = "none";
     this.meetingInProgressPanel.style.display = "flex";
@@ -389,11 +410,26 @@ class App {
       return;
     }
 
+    // Upload attachment if present
+    let attachmentPath = null;
+    if (this.meetingAttachmentInput.files.length > 0) {
+      try {
+        this.appendMeetingMessage("system", "Uploading attachment...");
+        const uploadResult = await this.api.uploadFile(this.meetingAttachmentInput.files[0]);
+        attachmentPath = uploadResult.filePath;
+        this.appendMeetingMessage("system", "Attachment uploaded successfully.");
+      } catch (error) {
+        console.error("Attachment upload failed:", error);
+        this.appendMeetingMessage("system", "Error uploading attachment. Proceeding without it.");
+      }
+    }
+
     // Create payload
     const payload = {
       topic: topic,
       company_context: context,
-      agents: agents
+      agents: agents,
+      attachment_path: attachmentPath
     };
 
     // Track active bubbles for each agent

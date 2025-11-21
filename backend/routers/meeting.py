@@ -50,7 +50,8 @@ async def run_meeting(request: MeetingRequest, llm_service: LLMService = Depends
                     company_context=request.company_context,
                     agent_name=agent_name,
                     persona_prompt=persona,
-                    history=history
+                    history=history,
+                    attachment_path=request.attachment_path
                 )
                 
                 # Add to history for context in next turns
