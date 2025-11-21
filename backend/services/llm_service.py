@@ -33,6 +33,38 @@ class LLMService:
             # If the coroutine fails, tag the exception with the model name
             return model_name, f"An error occurred: {str(e)}"
 
+    async def get_available_models(self) -> List[str]:
+        """
+        Safely retrieves models from the configured Ollama/RunPod instance.
+        Returns an empty list if the URL is invalid or the connection fails.
+        """
+        try:
+            base_url = await self.settings_service.get_setting('runpod_url')
+
+            if not base_url or not base_url.strip().lower().startswith("http"):
+                print("[LLMService] Skipping model fetch: No valid RunPod/Ollama URL configured.")
+                return []
+
+            url = f"{base_url.strip().rstrip('/')}/api/tags"
+            
+            # Use the class's shared http client with a short timeout for this check
+            response = await self.async_http_client.get(url, timeout=5.0)
+            response.raise_for_status()  # Raise an exception for 4xx or 5xx status codes
+            
+            data = response.json()
+            
+            model_names = [model['name'] for model in data.get('models', []) if 'name' in model]
+            return model_names
+            
+        except httpx.RequestError as e:
+            # Catches connection errors, timeouts, DNS errors etc.
+            print(f"[LLMService] Warning: Could not connect to Ollama to fetch models. Error: {e}")
+            return []
+        except Exception as e:
+            # Catches JSON errors, status code errors, etc.
+            print(f"[LLMService] Warning: Failed to get or parse Ollama models. Error: {e}")
+            return []
+        
     def _prepare_image_for_ollama(self, attachment_path: str) -> Optional[str]:
         if not attachment_path: return None
         try:
@@ -166,39 +198,59 @@ class LLMService:
 
     async def get_chat_response(self, history: List, user_message: str, node_context: str, attachment_path: str = None) -> dict:
         provider = await self.settings_service.get_setting('ai_provider', 'gemini')
-        if provider == 'runpod':
+        
+        # --- ADD FALLBACK LOGIC ---
+        use_ollama = provider == 'runpod'
+        if use_ollama:
+            # Health check: Can we actually reach Ollama?
+            available_models = await self.get_available_models()
+            if not available_models:
+                print("[LLMService] Fallback Warning: Ollama is configured but unreachable. Falling back to Gemini for this request.")
+                use_ollama = False # Force fallback to Gemini
+        # --- END FALLBACK LOGIC ---
+
+        if use_ollama:
             model_name = await self.settings_service.get_setting('ollama_model_name', 'llava')
             response_text = await self._get_ollama_chat(model_name, history, user_message, node_context, attachment_path)
-        else:
+        else: # This block now runs for Gemini OR as a fallback
             model_name = 'gemini-2.0-flash'
             response_text = await self._get_gemini_chat(history, user_message, node_context, attachment_path)
+        
         return {"response": response_text, "model_name": model_name}
 
     async def get_group_chat_responses(self, participants: List[str], history: List[Dict], user_message: str, node_context: str, attachment_path: str = None, target_model: str = None) -> AsyncGenerator[Dict, None]:
         
-        participants_to_call = []
-        if target_model and target_model in participants:
-            participants_to_call = [target_model]
-        else:
-            participants_to_call = participants
+        participants_to_call = target_model if target_model and target_model in participants else participants
 
-        # --- FINAL FIX: Use the robust "Wrapper" pattern ---
+        # --- ADD FALLBACK LOGIC FOR OLLAMA MODELS ---
+        ollama_models = [p for p in participants_to_call if 'gemini' not in p.lower()]
+        gemini_models = [p for p in participants_to_call if 'gemini' in p.lower()]
+        
+        final_participants = gemini_models
+        
+        if ollama_models:
+            # Health check: Can we actually reach Ollama?
+            available_ollama_models = await self.get_available_models()
+            if not available_ollama_models:
+                print(f"[LLMService] Fallback Warning: Ollama is configured but unreachable. Skipping {len(ollama_models)} Ollama participants for this group chat.")
+                # We simply don't add them to final_participants
+            else:
+                final_participants.extend(ollama_models)
+        # --- END FALLBACK LOGIC ---
+
         tasks = []
-        for model_name in participants_to_call:
+        for model_name in final_participants:
             coro = None
             if 'gemini' in model_name.lower():
                 coro = self._get_gemini_chat(history, user_message, node_context, attachment_path)
             else: 
                 coro = self._get_ollama_chat(model_name, history, user_message, node_context, attachment_path)
             
-            # Wrap the LLM call in our helper that tags the result with the model name
             tasks.append(self._run_and_tag_task(coro, model_name))
 
         for completed_task in asyncio.as_completed(tasks):
-            # The result of the completed task is now a tuple: (model_name, response_text)
             model_name, response_text = await completed_task
             
-            # This check is now implicitly handled by the wrapper, but we can still log
             if "An error occurred" in response_text:
                  print(f"Group Chat Error from {model_name}: {response_text}")
             else:

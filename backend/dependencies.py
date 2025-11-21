@@ -55,16 +55,3 @@ def get_root_dir() -> Path:
     from pathlib import Path
     return Path(__file__).resolve().parent.parent.parent
 
-# --- Additional Dependencies for specific routers (e.g., Ollama/Files) ---
-
-# We still need the old functions in ollama.py to fetch models, but we'll 
-# pass the URL from the settings service.
-
-async def get_ollama_base_url(
-    settings_service: SettingsService = Depends(get_settings_service)
-) -> str:
-    from fastapi import HTTPException
-    url = await settings_service.get_setting('runpod_url')
-    if not url:
-         raise HTTPException(status_code=400, detail="Ollama/RunPod URL is not configured.")
-    return url.rstrip('/')

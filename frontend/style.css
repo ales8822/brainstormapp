@@ -741,3 +741,85 @@ h3 {
   font-weight: bold;
   color: #34495e;
 }
+
+/* --- WORKSPACE PARTICIPANT STYLES --- */
+.participant-header-container {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+  border-bottom: 1px solid #dfe6e9;
+  padding-bottom: 10px;
+}
+
+.participant-header-container h3 {
+  margin: 0;
+  white-space: nowrap;
+}
+
+.participant-list {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.participant-tag {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background-color: #e9ecef;
+  border-radius: 15px;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: bold;
+  color: #495057;
+}
+
+.remove-participant-btn {
+  font-size: 14px;
+  font-weight: bold;
+  cursor: pointer;
+  opacity: 0.6;
+  transition: opacity 0.2s;
+}
+.remove-participant-btn:hover {
+  opacity: 1;
+}
+
+.add-participant-btn {
+  padding: 0;
+  width: 28px;
+  height: 28px;
+  min-width: 28px;
+  font-size: 20px;
+  line-height: 1;
+  border-radius: 50%;
+  margin-left: auto; /* Push to the far right */
+}
+
+/* Menu Styles */
+.participant-menu {
+  position: absolute;
+  background-color: white;
+  border: 1px solid #dfe6e9;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 1001;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+#workspace-participant-menu-list > div,
+.mention-item {
+  padding: 8px 15px;
+  cursor: pointer;
+  font-size: 14px;
+  border-bottom: 1px solid #f1f1f1;
+}
+#workspace-participant-menu-list > div:last-child {
+  border-bottom: none;
+}
+#workspace-participant-menu-list > div:hover,
+.mention-item:hover {
+  background-color: #f8f9fa;
+}

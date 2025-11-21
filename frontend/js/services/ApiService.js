@@ -104,6 +104,64 @@ class ApiService {
     });
   }
 
+  async streamGroupChat(payload, onData, onComplete) {
+    try {
+      const response = await fetch(`${this.baseUrl}/group-chat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Server error: ${response.status}`);
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = ""; // Buffer to hold incomplete lines
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) {
+          // Process any remaining text in the buffer
+          if (buffer.trim()) {
+            try {
+              onData(JSON.parse(buffer));
+            } catch (e) {
+              console.error("Error parsing final stream chunk:", buffer, e);
+            }
+          }
+          break;
+        }
+
+        // Add the new chunk to the buffer
+        buffer += decoder.decode(value, { stream: true });
+
+        // Process all complete lines in the buffer
+        let newlineIndex;
+        while ((newlineIndex = buffer.indexOf("\n")) >= 0) {
+          const line = buffer.slice(0, newlineIndex).trim();
+          buffer = buffer.slice(newlineIndex + 1);
+
+          if (line) {
+            try {
+              onData(JSON.parse(line));
+            } catch (e) {
+              console.error("Error parsing stream line:", line, e);
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Streaming API call failed:", error);
+      onData({ error: error.message });
+    } finally {
+      if (onComplete) {
+        onComplete();
+      }
+    }
+  }
+
   uploadFile(formData) {
     // Note: _fetch is not used here because FormData sets its own headers
     console.log("ApiService: Uploading file...");

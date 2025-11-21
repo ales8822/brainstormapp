@@ -6,6 +6,7 @@ class App {
     this.api = new ApiService("http://127.0.0.1:8000/api");
     this.graph = null;
     this.workspaceGraph = null;
+    this.participants = [];
 
     this.workspace = new IdeaWorkspace(this.api);
     this.settings = new SettingsModal(this.api);
@@ -34,7 +35,21 @@ class App {
     this.workspaceChatMessages = document.getElementById(
       "workspace-chat-messages"
     );
-
+    this.workspaceParticipantList = document.getElementById(
+      "workspace-participant-list"
+    );
+    this.workspaceAddParticipantBtn = document.getElementById(
+      "workspace-add-participant-btn"
+    );
+    this.workspaceParticipantMenu = document.getElementById(
+      "workspace-participant-menu"
+    );
+    this.workspaceParticipantMenuList = document.getElementById(
+      "workspace-participant-menu-list"
+    );
+    this.workspaceMentionMenu = document.getElementById(
+      "workspace-mention-menu"
+    );
     // --- ADD WORKSPACE ATTACHMENT REFS ---
     this.workspaceFileInput = document.getElementById("workspace-file-input");
     this.workspaceAttachFileButton = document.getElementById(
@@ -97,12 +112,20 @@ class App {
       if (settingsData.gemini_api_key) {
         availableModels.push("gemini-2.0-flash");
       }
-      if (settingsData.runpod_url && settingsData.runpod_url.trim() !== "") {
+      if (
+        settingsData.runpod_url &&
+        settingsData.runpod_url.trim() !== "" &&
+        settingsData.runpod_url.startsWith("http") // <--- NEW CHECK
+      ) {
         try {
           const ollamaData = await this.api.getOllamaModels();
-          if (ollamaData.models) availableModels.push(...ollamaData.models);
+          if (ollamaData.models && Array.isArray(ollamaData.models)) {
+            availableModels.push(...ollamaData.models);
+          }
         } catch (e) {
-          console.warn("App.init: Could not connect to Ollama on startup.");
+          // Silent fail or very low-level log if needed.
+          // Since backend now returns [] on error, this catch might not even trigger often.
+          console.log("Ollama not connected (skipping).");
         }
       }
 
@@ -182,7 +205,25 @@ class App {
     this.workspaceRemoveFileButton.addEventListener("click", () =>
       this.resetWorkspaceFileUpload()
     );
-
+    this.workspaceChatInput.addEventListener("input", (e) =>
+      this._handleWorkspaceMentionInput(e)
+    );
+    this.workspaceAddParticipantBtn.addEventListener("click", (e) =>
+      this._showWorkspaceParticipantMenu(e)
+    );
+    // Close menus on click outside
+    document.addEventListener("click", (e) => {
+      if (
+        !this.workspaceParticipantMenu.contains(e.target) &&
+        e.target !== this.workspaceAddParticipantBtn
+      ) {
+        this.workspaceParticipantMenu.style.display = "none";
+      }
+      // Simple logic to close mention menu if clicked elsewhere
+      if (e.target !== this.workspaceChatInput) {
+        this.workspaceMentionMenu.style.display = "none";
+      }
+    });
     document.addEventListener("keydown", (e) => this.handleKeyDown(e));
     this.inspectorStatusControls.addEventListener("click", (e) => {
       console.log(
@@ -204,6 +245,8 @@ class App {
     console.log(`Entering workspace for node: ${node.data("label")}`);
     this.activeWorkspaceNode = node;
     this.chatHistory = [];
+    this.participants = [];
+    const nodeGeneratedBy = node.data("generated_by");
     this.breadcrumbIdeaName.textContent = node.data("label");
     this.workspaceChatMessages.innerHTML = "";
     this.handleWorkspaceCanvasClick();
@@ -216,7 +259,20 @@ class App {
     this.workspaceView.style.display = "flex";
 
     this.workspaceGraph.resize();
-
+    // the creator model or default model
+    if (
+      nodeGeneratedBy &&
+      this.settings.availableModels.includes(nodeGeneratedBy)
+    ) {
+      this.participants.push(nodeGeneratedBy);
+    } else if (this.settings.availableModels.length > 0) {
+      // Default to Gemini or first available
+      const defaultModel =
+        this.settings.availableModels.find((m) => m.includes("gemini")) ||
+        this.settings.availableModels[0];
+      if (defaultModel) this.participants.push(defaultModel);
+    }
+    this._renderWorkspaceParticipants();
     try {
       const workspaceElements = await this.api.getWorkspaceElements(node.id());
       if (workspaceElements.length > 0) {
@@ -330,87 +386,106 @@ class App {
   }
 
   setupWorkspaceEventListeners() {
-    // Remove the "only once" check - we need to reinitialize tooltips each time
     const cy = this.workspaceGraph.cy;
 
-    // Only set up canvas/edge drawing listeners once
-    if (!this.workspaceEventListenersSetup) {
-      cy.on("tap", (event) => {
-        if (event.target === cy && this.edgeDrawSource) {
+    // 1. Clean up previous listeners to avoid duplicates or stale state
+    // We remove the specific handler types we are about to add
+    cy.off("tap", "node");
+    cy.off("tap"); // Removes the canvas click handler
+
+    console.log("Workspace event listeners refreshed.");
+
+    // 2. Re-bind Canvas Click (Background click)
+    cy.on("tap", (event) => {
+      if (event.target === cy) {
+        // Only trigger if clicking the background, not a node/edge
+        if (this.edgeDrawSource) {
           console.log("Cancelling edge draw.");
           this.workspaceGraph.removeClassFromAllNodes("edge-source-selected");
           this.edgeDrawSource = null;
         }
-      });
+        // Always try to close inspector on background click
+        this.handleWorkspaceCanvasClick();
+      }
+    });
 
-      cy.on("tap", "node", (event) => {
-        const targetNode = event.target;
+    // 3. Re-bind Node Click (Inspector & Edge Draw)
+    cy.on("tap", "node", (event) => {
+      const targetNode = event.target;
 
-        // CASE 1: We are in edge-drawing mode.
-        if (this.edgeDrawSource) {
-          const sourceId = this.edgeDrawSource.id();
-          const targetId = targetNode.id();
+      // CASE 1: Edge Drawing Mode
+      if (this.edgeDrawSource) {
+        const sourceId = this.edgeDrawSource.id();
+        const targetId = targetNode.id();
 
-          // If user clicks the same node, cancel the draw.
-          if (sourceId === targetId) {
-            this.handleWorkspaceCanvasClick(); // Reuse cancel logic
-            return;
-          }
-
-          // Complete the edge draw
-          const edgeId = `edge-${sourceId}-${targetId}`;
-          if (cy.getElementById(edgeId).length === 0) {
-            this.workspaceGraph.addEdge({
-              id: edgeId,
-              source: sourceId,
-              target: targetId,
-            });
-            this.api
-              .createEdge({ source: sourceId, target: targetId })
-              .then(() => console.log(`Edge saved: ${sourceId} -> ${targetId}`))
-              .catch((err) => {
-                console.error("Failed to save edge:", err);
-                this.workspaceGraph.removeNodeById(edgeId);
-                alert("Failed to save connection.");
-              });
-          }
-
-          this.handleWorkspaceCanvasClick(); // Reuse cancel logic to reset state
-          return; // IMPORTANT: Stop execution here
+        if (sourceId === targetId) {
+          this.handleWorkspaceCanvasClick(); // Clicked same node -> cancel
+          return;
         }
 
-        // CASE 2: We are NOT in edge-drawing mode. This is a normal node click.
-        console.log("Node selected for inspector:", targetNode.data("label"));
-        this.inspectedNode = targetNode;
-        this.inspectorContentEditor.value = targetNode.data("fullText");
-        // --- SHOW/HIDE ATTACHMENT ---
-        const attachmentPath = targetNode.data("attachment_path");
+        // Create the edge
+        const edgeId = `edge-${sourceId}-${targetId}`;
+        if (cy.getElementById(edgeId).length === 0) {
+          this.workspaceGraph.addEdge({
+            id: edgeId,
+            source: sourceId,
+            target: targetId,
+          });
+          this.api
+            .createEdge({ source: sourceId, target: targetId })
+            .then(() => console.log(`Edge saved: ${sourceId} -> ${targetId}`))
+            .catch((err) => {
+              console.error("Failed to save edge:", err);
+              this.workspaceGraph.removeNodeById(edgeId);
+              alert("Failed to save connection.");
+            });
+        }
+
+        this.handleWorkspaceCanvasClick(); // Reset state
+        return;
+      }
+
+      // CASE 2: Open Inspector
+      console.log("Node selected:", targetNode.data("label")); // Debug log
+      this.inspectedNode = targetNode;
+
+      // Update Content Editor
+      if (this.inspectorContentEditor) {
+        this.inspectorContentEditor.value = targetNode.data("fullText") || "";
+      }
+
+      // Show/Hide Attachment
+      const attachmentPath = targetNode.data("attachment_path");
+      if (this.inspectorAttachmentContainer) {
         if (attachmentPath) {
-          this.inspectorAttachmentImage.src = attachmentPath;
+          if (this.inspectorAttachmentImage)
+            this.inspectorAttachmentImage.src = attachmentPath;
           this.inspectorAttachmentContainer.style.display = "block";
         } else {
           this.inspectorAttachmentContainer.style.display = "none";
         }
-        // --- NEW LOGIC ---
-        this.inspectorStatusDisplay.querySelector("span").textContent =
-          targetNode.data("status");
-        this.inspectorStatusDisplay.style.display = "block"; // Make sure it's visible
+      }
 
+      // Update Status Display
+      const status = targetNode.data("status") || "Idea";
+      if (this.inspectorStatusDisplay) {
+        const span = this.inspectorStatusDisplay.querySelector("span");
+        if (span) span.textContent = status;
+        this.inspectorStatusDisplay.style.display = "block";
+      }
+
+      // Show Panel
+      if (this.inspectorPanel) {
         this.inspectorPanel.classList.add("visible");
-        this.updateInspectorStatusButtons(targetNode.data("status"));
-      });
-      // --- END OF REPLACEMENT BLOCK ---
+      }
 
-      this.workspaceEventListenersSetup = true;
-    }
+      this.updateInspectorStatusButtons(status);
+    });
 
-    // Check if tippy is available before setting up tooltips
-    if (typeof tippy === "undefined") {
-      console.warn("Tippy.js not available, skipping tooltip setup");
-      return;
-    }
+    // 4. Tippy Tooltips Setup (kept similar but ensured it runs)
+    if (typeof tippy === "undefined") return;
 
-    // Clean up any existing tooltips first
+    // Destroy old tooltips first
     cy.nodes().forEach((node) => {
       const existingTippy = node.data("tippy");
       if (existingTippy) {
@@ -419,212 +494,368 @@ class App {
       }
     });
 
-    console.log(`Setting up Tippy tooltips for ${cy.nodes().length} nodes`);
-
     const setupNodeTippy = (node) => {
       const tip = tippy(document.body, {
         getReferenceClientRect: () => {
           const pos = node.renderedPosition();
-          const rect = {
-            width: 150,
-            height: 150,
-            top: pos.y - 80,
-            bottom: pos.y - 80 + 150,
-            left: pos.x - 75,
-            right: pos.x - 75 + 150,
+          // Simple box around the node
+          return {
+            width: 100,
+            height: 100,
+            top: pos.y - 50,
+            bottom: pos.y + 50,
+            left: pos.x - 50,
+            right: pos.x + 50,
           };
-          return rect;
         },
         trigger: "manual",
         interactive: true,
         appendTo: document.body,
         placement: "top",
-        offset: [0, 10],
-        hideOnClick: false,
-        onShow(instance) {
-          // Store reference for manual hiding
-          node.data("tippyInstance", instance);
-        },
+        offset: [0, 5],
         content: () => {
           const button = document.createElement("button");
           button.classList.add("edge-connector-button");
           button.innerHTML = "+";
           button.dataset.nodeId = node.id();
-          button.style.cssText = `
-            background: #3498db;
-            color: white;
-            border: none;
-            border-radius: 50%;
-            width: 30px;
-            height: 30px;
-            font-size: 20px;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-            transition: all 0.2s ease;
-          `;
-          button.onmouseover = () => {
-            button.style.background = "#2980b9";
-            button.style.transform = "scale(1.1)";
-          };
-          button.onmouseout = () => {
-            button.style.background = "#3498db";
-            button.style.transform = "scale(1)";
-          };
+          // Inline styles for reliability
+          button.style.cssText =
+            "background:#3498db;color:white;border:none;border-radius:50%;width:24px;height:24px;cursor:pointer;display:flex;justify-content:center;align-items:center;";
           return button;
         },
       });
 
       node.data("tippy", tip);
 
-      let hoverTimeout;
-      let isOverTooltip = false;
-
-      node.on("mouseover", () => {
-        clearTimeout(hoverTimeout);
-        tip.show();
-      });
-
-      node.on("mouseout", () => {
-        hoverTimeout = setTimeout(() => {
-          if (!isOverTooltip) {
-            tip.hide();
-          }
-        }, 150);
-      });
-
-      // Track when mouse is over tooltip content
-      tip.popper.addEventListener("mouseenter", () => {
-        isOverTooltip = true;
-        clearTimeout(hoverTimeout);
-      });
-
-      tip.popper.addEventListener("mouseleave", () => {
-        isOverTooltip = false;
-        tip.hide();
-      });
-
-      // Hide tooltip when node is dragged
-      node.on("drag", () => {
-        tip.hide();
-      });
+      // Bind hover events
+      node.on("mouseover", () => tip.show());
+      node.on("mouseout", () => setTimeout(() => tip.hide(), 500)); // Small delay
+      node.on("drag", () => tip.hide());
     };
 
+    // Apply to all nodes
     cy.nodes().forEach(setupNodeTippy);
+    cy.on("add", "node", (e) => setupNodeTippy(e.target));
 
-    cy.on("add", "node", (event) => {
-      setupNodeTippy(event.target);
-    });
-
-    // Set up the click listener for "+" buttons (only once)
+    // Re-bind button listener only if needed (globally)
     if (!this.workspaceButtonListenerSetup) {
       document.body.addEventListener("click", (event) => {
-        const target = event.target;
-
-        // Handle "+" button clicks
-        if (target.classList.contains("edge-connector-button")) {
-          event.stopPropagation();
-          event.preventDefault();
-          const nodeId = target.dataset.nodeId;
+        if (event.target.classList.contains("edge-connector-button")) {
+          event.stopPropagation(); // Prevent other clicks
+          const nodeId = event.target.dataset.nodeId;
           const node = this.workspaceGraph.cy.getElementById(nodeId);
 
-          // Hide the tooltip
           if (node && node.data("tippy")) node.data("tippy").hide();
 
-          console.log(`Edge draw initiated from node: ${nodeId}`);
-          this.workspaceGraph.removeClassFromAllNodes("edge-source-selected");
+          console.log("Edge draw start:", nodeId);
           this.edgeDrawSource = node;
           this.workspaceGraph.addClassToNode(nodeId, "edge-source-selected");
-
-          // Visual feedback
           document.body.style.cursor = "crosshair";
-          if (this.edgeModeIndicator) {
+          if (this.edgeModeIndicator)
             this.edgeModeIndicator.style.display = "block";
-          }
-          return;
         }
       });
       this.workspaceButtonListenerSetup = true;
     }
   }
 
+  // --- Participant & Mention Logic ---
+
+  _renderWorkspaceParticipants() {
+    this.workspaceParticipantList.innerHTML = "";
+    this.participants.forEach((modelName) => {
+      const tag = document.createElement("div");
+      tag.className = "participant-tag";
+      tag.dataset.modelTag = modelName; // For styling active state
+      // Show simple name
+      tag.textContent = modelName.split(":")[0];
+
+      // Remove button
+      const removeBtn = document.createElement("span");
+      removeBtn.className = "remove-participant-btn";
+      removeBtn.innerHTML = "&times;";
+      removeBtn.onclick = (e) => {
+        e.stopPropagation();
+        this._removeWorkspaceParticipant(modelName);
+      };
+      tag.appendChild(removeBtn);
+
+      this.workspaceParticipantList.appendChild(tag);
+    });
+  }
+
+  _removeWorkspaceParticipant(modelName) {
+    if (this.participants.length <= 1) {
+      alert("You must have at least one participant.");
+      return;
+    }
+    this.participants = this.participants.filter((p) => p !== modelName);
+    this._renderWorkspaceParticipants();
+  }
+
+  _showWorkspaceParticipantMenu(event) {
+    event.stopPropagation();
+    this.workspaceParticipantMenuList.innerHTML = "";
+
+    const modelsToAdd = this.settings.availableModels.filter(
+      (m) => !this.participants.includes(m)
+    );
+
+    if (modelsToAdd.length === 0) {
+      this.workspaceParticipantMenuList.innerHTML =
+        "<div style='padding:10px;'>No other models available.</div>";
+    } else {
+      modelsToAdd.forEach((modelName) => {
+        const div = document.createElement("div");
+        div.style.padding = "5px 10px";
+        div.style.cursor = "pointer";
+        div.textContent = modelName;
+        div.onclick = () => {
+          this.participants.push(modelName);
+          this._renderWorkspaceParticipants();
+          this.workspaceParticipantMenu.style.display = "none";
+        };
+        this.workspaceParticipantMenuList.appendChild(div);
+      });
+    }
+
+    const rect = this.workspaceAddParticipantBtn.getBoundingClientRect();
+    this.workspaceParticipantMenu.style.top = `${rect.bottom + 5}px`;
+    this.workspaceParticipantMenu.style.left = `${rect.left}px`;
+    this.workspaceParticipantMenu.style.display = "block";
+  }
+
+  _handleWorkspaceMentionInput(event) {
+    const text = event.target.value;
+    const lastWord = text.split(" ").pop();
+
+    if (lastWord.startsWith("@") && this.participants.length > 0) {
+      const searchTerm = lastWord.substring(1).toLowerCase();
+      const matches = this.participants.filter((p) =>
+        p.toLowerCase().includes(searchTerm)
+      );
+      this._showWorkspaceMentionMenu(matches);
+    } else {
+      this.workspaceMentionMenu.style.display = "none";
+    }
+  }
+
+  _showWorkspaceMentionMenu(matches) {
+    this.workspaceMentionMenu.innerHTML = "";
+    if (matches.length === 0) {
+      this.workspaceMentionMenu.style.display = "none";
+      return;
+    }
+
+    matches.forEach((modelName) => {
+      const item = document.createElement("div");
+      item.className = "mention-item"; // Ensure you have css for this
+      item.textContent = modelName;
+      item.onclick = () => {
+        const words = this.workspaceChatInput.value.split(" ");
+        words.pop(); // Remove partial
+        this.workspaceChatInput.value =
+          words.join(" ") + (words.length > 0 ? " " : "") + `@${modelName} `;
+        this.workspaceChatInput.focus();
+        this.workspaceMentionMenu.style.display = "none";
+      };
+      this.workspaceMentionMenu.appendChild(item);
+    });
+
+    const rect = this.workspaceChatInput.getBoundingClientRect();
+    this.workspaceMentionMenu.style.bottom = `${
+      window.innerHeight - rect.top + 5
+    }px`; // Above input
+    this.workspaceMentionMenu.style.left = `${rect.left}px`;
+    this.workspaceMentionMenu.style.display = "block";
+  }
+
   async handleWorkspaceChatSubmit(event) {
     event.preventDefault();
     if (!this.activeWorkspaceNode) return;
 
-    const messageText = this.workspaceChatInput.value.trim();
-    const attachmentPathForThisMessage = this.workspaceAttachedFilePath; // Capture the path for this specific message
+    let messageText = this.workspaceChatInput.value.trim();
+    const attachmentPathForThisMessage = this.workspaceAttachedFilePath;
 
     if (!messageText && !attachmentPathForThisMessage) return;
 
-    this.appendChatMessage("user", messageText, attachmentPathForThisMessage);
+    let targetModel = null;
+    let displayMessage = messageText;
+
+    if (messageText.startsWith("@")) {
+      const words = messageText.split(" ");
+      const mention = words[0];
+      const possibleModel = mention.substring(1);
+      if (this.participants.includes(possibleModel)) {
+        targetModel = possibleModel;
+        messageText = words.slice(1).join(" "); // Clean message for AI
+      }
+    }
+
+    this.appendChatMessage(
+      "user",
+      displayMessage,
+      attachmentPathForThisMessage
+    );
     this.workspaceChatInput.value = "";
     this.workspaceChatInput.focus();
 
+    const submitBtn = this.workspaceChatForm.querySelector(
+      "button[type='submit']"
+    );
+    submitBtn.disabled = true;
+
     this.chatHistory.push({ role: "user", parts: [messageText] });
-    const thinkingIndicator = this.appendChatMessage("model", "Thinking...");
 
-    try {
-      const payload = {
-        nodeId: this.activeWorkspaceNode.id(),
-        nodeContext: this.activeWorkspaceNode.data("fullText"),
-        history: this.chatHistory,
-        userMessage: messageText,
-        attachmentPath: attachmentPathForThisMessage,
-      };
+    const participantsToCall = targetModel ? [targetModel] : this.participants;
 
-      const response = await this.api.sendMessage(payload);
-      const aiResponseText = response.response;
-
-      // --- FIX: Update the AI's message bubble with text and attachment context ---
-      const textSpan = thinkingIndicator.querySelector("span");
-      if (textSpan) {
-        textSpan.textContent = aiResponseText;
-      }
-
-      // If this was a response to an image, add the context to the AI's message bubble
-      if (attachmentPathForThisMessage) {
-        thinkingIndicator.dataset.attachmentPath = attachmentPathForThisMessage;
-        const img = document.createElement("img");
-        img.src = attachmentPathForThisMessage;
-        img.classList.add("chat-message-attachment");
-        thinkingIndicator.appendChild(img);
-      }
-      // --- END FIX ---
-
-      this.chatHistory.push({ role: "model", parts: [aiResponseText] });
-    } catch (error) {
-      thinkingIndicator.textContent = `Error: ${error.message}`;
-    } finally {
-      // Don't reset the file upload here, allow it to be sticky
+    if (participantsToCall.length === 0) {
+      this.appendChatMessage(
+        "model",
+        "Error: No AI model selected. Please add a participant using the '+' button."
+      );
+      submitBtn.disabled = false;
+      return;
     }
+
+    const isGroupChat = participantsToCall.length > 1;
+
+    // --- LOGIC FOR SINGLE CHAT (Non-streaming) ---
+    if (!isGroupChat) {
+      const modelName = participantsToCall[0];
+      const thinkingIndicator = this.appendChatMessage(
+        "model",
+        "Thinking...",
+        attachmentPathForThisMessage,
+        modelName
+      );
+
+      try {
+        const payload = {
+          nodeId: this.activeWorkspaceNode.id(),
+          nodeContext: this.activeWorkspaceNode.data("fullText"),
+          history: this.chatHistory,
+          userMessage: messageText,
+          attachmentPath: attachmentPathForThisMessage,
+        };
+        const response = await this.api.sendMessage(payload);
+        const textSpan = thinkingIndicator.querySelector(".message-content");
+        if (textSpan) textSpan.textContent = response.response;
+        this.chatHistory.push({
+          role: "model",
+          parts: [response.response],
+          generated_by: response.model_name,
+        });
+      } catch (error) {
+        thinkingIndicator.querySelector(
+          ".message-content"
+        ).textContent = `Error: ${error.message}`;
+      } finally {
+        submitBtn.disabled = false;
+        if (attachmentPathForThisMessage) {
+          this.resetWorkspaceFileUpload();
+        }
+      }
+      return;
+    }
+
+    // --- LOGIC FOR GROUP CHAT (Streaming) ---
+    const activeBubbles = {};
+    // ** THE FIX IS HERE: Create bubbles before the API call **
+    participantsToCall.forEach((modelName) => {
+      const bubble = this.appendChatMessage(
+        "model",
+        "Thinking...",
+        attachmentPathForThisMessage,
+        modelName
+      );
+      activeBubbles[modelName] = bubble;
+    });
+
+    const payload = {
+      nodeId: this.activeWorkspaceNode.id(),
+      nodeContext: this.activeWorkspaceNode.data("fullText"),
+      history: this.chatHistory,
+      userMessage: messageText,
+      participants: participantsToCall,
+      attachmentPath: attachmentPathForThisMessage,
+    };
+
+    // Call the streaming API.
+    this.api.streamGroupChat(
+      payload,
+      // onData callback
+      (data) => {
+        if (data.error || !data.model_name) {
+          console.error("Stream data error:", data);
+          return;
+        }
+        const model = data.model_name;
+        if (activeBubbles[model]) {
+          const textSpan =
+            activeBubbles[model].querySelector(".message-content");
+          if (textSpan) textSpan.textContent = data.response;
+        }
+      },
+      // onComplete callback
+      () => {
+        console.log("Group chat stream completed.");
+        Object.keys(activeBubbles).forEach((model) => {
+          const bubble = activeBubbles[model];
+          const finalResponse =
+            bubble.querySelector(".message-content").textContent;
+          if (!finalResponse.includes("Thinking...")) {
+            this.chatHistory.push({
+              role: "model",
+              parts: [finalResponse],
+              generated_by: model,
+            });
+          }
+        });
+        submitBtn.disabled = false;
+        if (attachmentPathForThisMessage) {
+          this.resetWorkspaceFileUpload();
+        }
+      }
+    );
   }
 
-  appendChatMessage(role, text, attachmentPath = null) {
+  // Update helper to support model header
+  appendChatMessage(role, text, attachmentPath = null, modelName = null) {
     const messageElement = document.createElement("div");
     messageElement.classList.add("chat-message", role);
 
+    // Store the attachment path on the element's dataset so it can be
+    // retrieved later by the "Promote" button.
     if (attachmentPath) {
       messageElement.dataset.attachmentPath = attachmentPath;
     }
 
-    if (text) {
-      const textSpan = document.createElement("span");
-      textSpan.textContent = text;
-      messageElement.appendChild(textSpan);
+    // Add a header for AI messages that specifies the model name
+    if (role === "model" && modelName) {
+      const header = document.createElement("div");
+      header.classList.add("message-header");
+      header.textContent = modelName;
+      messageElement.appendChild(header);
     }
 
-    if (attachmentPath && role === "user") {
-      // Only show thumbnail on user message initially
+    // Add the text content in its own span for easy selection
+    const textSpan = document.createElement("span");
+    textSpan.className = "message-content";
+    if (text) {
+      textSpan.textContent = text;
+    }
+    messageElement.appendChild(textSpan);
+
+    // Add the image thumbnail if an attachment path exists
+    if (attachmentPath) {
       const img = document.createElement("img");
       img.src = attachmentPath;
       img.classList.add("chat-message-attachment");
       messageElement.appendChild(img);
     }
 
-    // --- REVERTED FIX: Always add promote button for AI messages ---
+    // Add the "Promote" button for all AI messages
     if (role === "model") {
       const promoteBtn = document.createElement("button");
       promoteBtn.classList.add("promote-button");
@@ -632,9 +863,9 @@ class App {
       promoteBtn.title = "Promote to node";
       promoteBtn.addEventListener("click", (event) => {
         const parentMessage = event.currentTarget.parentElement;
-        // If there's text, use it. Otherwise, provide a default.
         const currentText =
-          parentMessage.querySelector("span")?.textContent || "Image Analysis";
+          parentMessage.querySelector(".message-content")?.textContent ||
+          "Image Analysis";
         const currentAttachment = parentMessage.dataset.attachmentPath || null;
         this.handlePromoteMessage(currentText, currentAttachment);
       });

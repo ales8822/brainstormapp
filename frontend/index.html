@@ -109,12 +109,24 @@
         </div>
         <div id="workspace-cy" class="workspace-canvas"></div>
         <div class="workspace-chat-panel">
-          <h3>Discuss with AI</h3>
+          <!-- UPDATED: Participant Header -->
+          <div class="participant-header-container">
+            <h3>Discuss with AI</h3>
+            <div id="workspace-participant-list" class="participant-list"></div>
+            <button
+              id="workspace-add-participant-btn"
+              class="add-participant-btn"
+              title="Add AI Participant"
+            >
+              +
+            </button>
+          </div>
+
           <div id="workspace-chat-messages" class="chat-messages">
             <!-- Messages will be added here by JavaScript -->
           </div>
+
           <form id="workspace-chat-form" class="chat-form">
-            <!-- ADD THIS FILE UPLOAD CONTAINER -->
             <div class="chat-file-upload-container">
               <input
                 type="file"
@@ -140,7 +152,7 @@
             <input
               type="text"
               id="workspace-chat-input"
-              placeholder="Ask a question..."
+              placeholder="Ask a question or @mention..."
               autocomplete="off"
               required
             />
@@ -279,7 +291,21 @@
     <div id="mention-menu" class="participant-menu" style="display: none">
       <!-- Mention suggestions will be added here by JavaScript -->
     </div>
-
+    <!-- === Workspace Specific Popups === -->
+    <div
+      id="workspace-participant-menu"
+      class="participant-menu"
+      style="display: none"
+    >
+      <div id="workspace-participant-menu-list"></div>
+    </div>
+    <div
+      id="workspace-mention-menu"
+      class="participant-menu"
+      style="display: none"
+    >
+      <!-- Mentions appear here -->
+    </div>
     <!-- Script loading -->
     <script>
       function loadScript(src) {
