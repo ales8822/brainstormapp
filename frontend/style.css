@@ -1252,3 +1252,104 @@ h3 {
 .action-btn:active {
   transform: translateY(0);
 }
+
+/* Board Assembly Styles */
+.board-assembly-panel {
+  width: 100%;
+  max-width: 1000px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.board-assembly-panel h3 {
+  font-size: 24px;
+  color: #ecf0f1;
+  margin-bottom: 10px;
+}
+
+.assembly-intro {
+  color: #95a5a6;
+  margin-bottom: 40px;
+}
+
+.boardroom-table {
+  position: relative;
+  width: 800px;
+  height: 400px;
+  margin-bottom: 40px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.table-surface {
+  width: 600px;
+  height: 250px;
+  background-color: #2c3e50;
+  border-radius: 125px;
+  /* Oval shape */
+  border: 10px solid #34495e;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1;
+}
+
+.center-piece {
+  color: rgba(255, 255, 255, 0.5);
+  font-weight: bold;
+  text-align: center;
+  padding: 20px;
+}
+
+.chairs-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  /* Let clicks pass through container */
+}
+
+.chair {
+  position: absolute;
+  width: 80px;
+  height: 80px;
+  background-color: #1e1e1e;
+  border: 2px dashed #444;
+  border-radius: 50%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  pointer-events: auto;
+  /* Re-enable clicks */
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.chair:hover {
+  border-color: #3498db;
+  background-color: #2d2d2d;
+  transform: scale(1.1);
+}
+
+.add-agent-btn {
+  font-size: 30px;
+  color: #666;
+  background: none;
+  border: none;
+  cursor: pointer;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.chair:hover .add-agent-btn {
+  color: #3498db;
+}

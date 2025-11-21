@@ -91,6 +91,13 @@ class App {
     this.meetingTopicInput = document.getElementById("meeting-topic");
     this.companyContextInput = document.getElementById("company-context");
     this.setContextBtn = document.getElementById("set-context-btn");
+    this.briefingPanel = document.getElementById("briefing-panel");
+
+    // --- BOARD ASSEMBLY REFS ---
+    this.boardAssemblyPanel = document.getElementById("board-assembly-panel");
+    this.chairsContainer = document.getElementById("chairs-container");
+    this.displayTopic = document.getElementById("display-topic");
+    this.startMeetingBtn = document.getElementById("start-meeting-btn");
 
     // --- DOM REFS FOR INSPECTOR ---
     this.inspectorPanel = document.getElementById("workspace-inspector-panel");
@@ -326,8 +333,63 @@ class App {
     console.log("Topic:", topic);
     console.log("Context:", context);
 
-    // TODO: Transition to Assemble Board phase
-    alert("Context set! (Check console for details)");
+    console.log("Setting Context:");
+    console.log("Topic:", topic);
+    console.log("Context:", context);
+
+    // Transition to Assemble Board phase
+    this.briefingPanel.style.display = "none";
+    this.boardAssemblyPanel.style.display = "flex";
+    this.displayTopic.textContent = topic;
+
+    this.initializeBoardChairs();
+  }
+
+  initializeBoardChairs() {
+    this.chairsContainer.innerHTML = "";
+    // Define 6 positions around the oval table
+    // Ellipse formula: x = a * cos(t), y = b * sin(t)
+    // Table size: 600x250. Center is (400, 200) relative to container (800x400).
+    // a = 350 (horizontal radius + padding), b = 170 (vertical radius + padding)
+
+    const positions = [
+      { angle: 0 }, // Right
+      { angle: Math.PI / 3 }, // Bottom Right
+      { angle: (2 * Math.PI) / 3 }, // Bottom Left
+      { angle: Math.PI }, // Left
+      { angle: (4 * Math.PI) / 3 }, // Top Left
+      { angle: (5 * Math.PI) / 3 }, // Top Right
+    ];
+
+    const centerX = 400;
+    const centerY = 200;
+    const radiusX = 340;
+    const radiusY = 160;
+
+    positions.forEach((pos, index) => {
+      const x = centerX + radiusX * Math.cos(pos.angle) - 40; // -40 for half chair width
+      const y = centerY + radiusY * Math.sin(pos.angle) - 40;
+
+      const chair = document.createElement("div");
+      chair.className = "chair empty";
+      chair.style.left = `${x}px`;
+      chair.style.top = `${y}px`;
+      chair.dataset.index = index;
+
+      const btn = document.createElement("button");
+      btn.className = "add-agent-btn";
+      btn.textContent = "+";
+      btn.title = "Add Agent";
+      btn.onclick = () => this.handleAddAgentClick(index);
+
+      chair.appendChild(btn);
+      this.chairsContainer.appendChild(chair);
+    });
+  }
+
+  handleAddAgentClick(index) {
+    console.log(`Clicked chair ${index}`);
+    // TODO: Open agent selection menu
   }
 
   enterMeetingBoard() {
