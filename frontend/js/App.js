@@ -98,6 +98,10 @@ class App {
     this.chairsContainer = document.getElementById("chairs-container");
     this.displayTopic = document.getElementById("display-topic");
     this.startMeetingBtn = document.getElementById("start-meeting-btn");
+    this.meetingAgentMenu = document.getElementById("meeting-agent-menu");
+    this.meetingAgentMenuList = document.getElementById("meeting-agent-menu-list");
+
+    this.meetingAgents = {}; // { chairIndex: agentName }
 
     // --- DOM REFS FOR INSPECTOR ---
     this.inspectorPanel = document.getElementById("workspace-inspector-panel");
@@ -336,16 +340,18 @@ class App {
     console.log("Setting Context:");
     console.log("Topic:", topic);
     console.log("Context:", context);
-
     // Transition to Assemble Board phase
     this.briefingPanel.style.display = "none";
     this.boardAssemblyPanel.style.display = "flex";
     this.displayTopic.textContent = topic;
 
+    this.meetingAgents = {}; // Reset agents
+    this.startMeetingBtn.disabled = true;
     this.initializeBoardChairs();
   }
 
   initializeBoardChairs() {
+    this.chairsContainer.innerHTML = "";
     this.chairsContainer.innerHTML = "";
     // Define 6 positions around the oval table
     // Ellipse formula: x = a * cos(t), y = b * sin(t)
@@ -367,34 +373,120 @@ class App {
     const radiusY = 160;
 
     positions.forEach((pos, index) => {
-      const x = centerX + radiusX * Math.cos(pos.angle) - 40; // -40 for half chair width
+      const x = centerX + radiusX * Math.cos(pos.angle) - 40;
       const y = centerY + radiusY * Math.sin(pos.angle) - 40;
 
       const chair = document.createElement("div");
-      chair.className = "chair empty";
+      chair.className = "chair";
       chair.style.left = `${x}px`;
       chair.style.top = `${y}px`;
       chair.dataset.index = index;
 
-      const btn = document.createElement("button");
-      btn.className = "add-agent-btn";
-      btn.textContent = "+";
-      btn.title = "Add Agent";
-      btn.onclick = () => this.handleAddAgentClick(index);
+      const agentName = this.meetingAgents[index];
 
-      chair.appendChild(btn);
+      if (agentName) {
+        chair.classList.add("occupied");
+        chair.innerHTML = `
+           <div class="agent-avatar">${agentName.charAt(0)}</div>
+           <div class="agent-name">${agentName}</div>
+           <button class="remove-agent-btn" title="Remove">×</button>
+         `;
+        chair.querySelector(".remove-agent-btn").onclick = (e) => {
+          e.stopPropagation();
+          this.handleRemoveAgent(index);
+        };
+      } else {
+        chair.classList.add("empty");
+        const btn = document.createElement("button");
+        btn.className = "add-agent-btn";
+        btn.textContent = "+";
+        btn.title = "Add Agent";
+        btn.onclick = (e) => {
+          e.stopPropagation();
+          this.handleAddAgentClick(index, e);
+        };
+        chair.appendChild(btn);
+      }
+
       this.chairsContainer.appendChild(chair);
     });
+
+    // Close menu when clicking elsewhere
+    document.addEventListener('click', (e) => {
+      if (!this.meetingAgentMenu.contains(e.target)) {
+        this.meetingAgentMenu.style.display = 'none';
+      }
+    }, { once: true }); // Use once to avoid stacking listeners, or manage carefully
   }
 
-  handleAddAgentClick(index) {
+  handleAddAgentClick(index, event) {
     console.log(`Clicked chair ${index}`);
-    // TODO: Open agent selection menu
+    this.showAgentMenu(index, event.clientX, event.clientY);
+  }
+
+  showAgentMenu(chairIndex, x, y) {
+    this.meetingAgentMenuList.innerHTML = "";
+    const availableModels = this.settings.availableModels || ["Gemini"]; // Fallback
+
+    availableModels.forEach((model) => {
+      // Don't show agents already seated
+      if (Object.values(this.meetingAgents).includes(model)) return;
+
+      const item = document.createElement("div");
+      item.className = "menu-item";
+      item.textContent = model;
+      item.style.padding = "10px";
+      item.style.cursor = "pointer";
+      item.style.borderBottom = "1px solid #444";
+
+      item.addEventListener("mouseenter", () => {
+        item.style.backgroundColor = "#3d3d3d";
+      });
+      item.addEventListener("mouseleave", () => {
+        item.style.backgroundColor = "transparent";
+      });
+
+      item.addEventListener("click", () => {
+        this.handleSelectMeetingAgent(chairIndex, model);
+        this.meetingAgentMenu.style.display = "none";
+      });
+      this.meetingAgentMenuList.appendChild(item);
+    });
+
+    if (this.meetingAgentMenuList.children.length === 0) {
+      const emptyMsg = document.createElement("div");
+      emptyMsg.textContent = "No more agents available";
+      emptyMsg.style.padding = "10px";
+      emptyMsg.style.color = "#999";
+      this.meetingAgentMenuList.appendChild(emptyMsg);
+    }
+
+    this.meetingAgentMenu.style.left = `${x}px`;
+    this.meetingAgentMenu.style.top = `${y}px`;
+    this.meetingAgentMenu.style.display = "block";
+  }
+
+  handleSelectMeetingAgent(chairIndex, agentName) {
+    this.meetingAgents[chairIndex] = agentName;
+    this.initializeBoardChairs(); // Re-render
+    this.updateStartButtonState();
+  }
+
+  handleRemoveAgent(chairIndex) {
+    delete this.meetingAgents[chairIndex];
+    this.initializeBoardChairs(); // Re-render
+    this.updateStartButtonState();
+  }
+
+  updateStartButtonState() {
+    const hasAgents = Object.keys(this.meetingAgents).length > 0;
+    this.startMeetingBtn.disabled = !hasAgents;
+    this.startMeetingBtn.style.opacity = hasAgents ? "1" : "0.5";
+    this.startMeetingBtn.style.cursor = hasAgents ? "pointer" : "not-allowed";
   }
 
   enterMeetingBoard() {
     console.log("Entering Meeting Board...");
-    this.overviewView.style.display = "none";
     this.workspaceView.style.display = "none";
     this.meetingBoardView.style.display = "flex";
   }
