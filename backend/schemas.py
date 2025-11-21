@@ -32,11 +32,8 @@ class GroupChatRequest(BaseModel):
     participants: List[str] # The list of model names to query
     target_model: Optional[str] = Field(None, alias="targetModel") 
 
-
-# Add this new class at the end of the file
 class SimpleNodeRequest(BaseModel):
     label: str
-
 
 class PromoteNodeRequest(BaseModel):
     parent_node_id: str
@@ -55,3 +52,8 @@ class DeleteEdgeRequest(BaseModel):
 
 class NodeContentUpdateRequest(BaseModel):
     full_text: str
+
+class MeetingRequest(BaseModel):
+    topic: str
+    company_context: str
+    agents: List[str]

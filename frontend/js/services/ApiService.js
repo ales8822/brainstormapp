@@ -202,4 +202,59 @@ class ApiService {
   getOllamaModels() {
     return this._fetch("/ollama/models");
   }
+
+  async streamMeeting(payload, onData, onComplete) {
+    try {
+      const response = await fetch(`${this.baseUrl}/meetings/run`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Server error: ${response.status}`);
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) {
+          if (buffer.trim()) {
+            try {
+              onData(JSON.parse(buffer));
+            } catch (e) {
+              console.error("Error parsing final stream chunk:", buffer, e);
+            }
+          }
+          break;
+        }
+
+        buffer += decoder.decode(value, { stream: true });
+
+        let newlineIndex;
+        while ((newlineIndex = buffer.indexOf("\n")) >= 0) {
+          const line = buffer.slice(0, newlineIndex).trim();
+          buffer = buffer.slice(newlineIndex + 1);
+
+          if (line) {
+            try {
+              onData(JSON.parse(line));
+            } catch (e) {
+              console.error("Error parsing stream line:", line, e);
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Streaming meeting API call failed:", error);
+      onData({ error: error.message });
+    } finally {
+      if (onComplete) {
+        onComplete();
+      }
+    }
+  }
 }

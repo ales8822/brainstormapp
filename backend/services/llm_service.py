@@ -1,4 +1,4 @@
-# backend/services/llm_service.py (FINAL - WITH ROBUST STREAMING)
+# backend/services/llm_service.py (FINAL - WITH MEETING MINUTES)
 
 import json
 import httpx
@@ -257,3 +257,63 @@ class LLMService:
                  print(f"Group Chat Response received from {model_name}")
 
             yield {"model_name": model_name, "response": response_text}
+
+    async def run_meeting_turn(self, topic: str, company_context: str, agent_name: str, persona_prompt: str, history: List[Dict] = []) -> str:
+        system_prompt = f"""
+        You are participating in a board meeting.
+        Your Persona: {persona_prompt}
+        
+        Meeting Topic: {topic}
+        Company Context: {company_context}
+        
+        Your Goal: Provide a concise, insightful contribution to the discussion based on your persona. 
+        Do not repeat what others have said. Focus on your specific area of expertise.
+        Keep your response under 100 words.
+        """
+        
+        user_trigger = "It is your turn to speak. Please provide your input."
+        
+        if 'gemini' in agent_name.lower():
+            return await self._get_gemini_chat(history, user_trigger, system_prompt)
+        else:
+            return await self._get_ollama_chat(agent_name, history, user_trigger, system_prompt)
+
+    async def synthesize_meeting_minutes(self, topic: str, company_context: str, transcript: List[Dict]) -> str:
+        """
+        Generate formal meeting minutes from the transcript.
+        transcript should be a list of dicts with 'agent' and 'statement' keys.
+        """
+        # Build the transcript text
+        transcript_text = ""
+        for entry in transcript:
+            agent = entry.get('agent', 'Unknown')
+            statement = entry.get('statement', '')
+            transcript_text += f"**{agent}**: {statement}\n\n"
+        
+        system_prompt = f"""
+        You are an AI Executive Secretary tasked with synthesizing meeting minutes.
+        
+        Meeting Topic: {topic}
+        Company Context: {company_context}
+        
+        Your task is to create a professional, well-structured meeting summary in Markdown format.
+        
+        Include the following sections:
+        1. **Executive Summary** - A brief overview of the meeting's purpose and key outcomes
+        2. **Key Discussion Points** - Main topics discussed, organized by theme
+        3. **Decisions & Recommendations** - Clear action items and strategic recommendations
+        4. **Participant Perspectives** - Brief summary of each participant's main contribution
+        5. **Next Steps** - Suggested follow-up actions
+        
+        Be concise but comprehensive. Use professional business language.
+        Format your response in clean Markdown with proper headers, bullet points, and emphasis.
+        """
+        
+        user_message = f"Please synthesize the following meeting transcript:\n\n{transcript_text}"
+        
+        # Use Gemini for high-quality synthesis
+        try:
+            minutes = await self._get_gemini_chat([], user_message, system_prompt)
+            return minutes
+        except Exception as e:
+            return f"# Meeting Minutes\n\n**Error generating minutes**: {str(e)}\n\n## Raw Transcript\n\n{transcript_text}"

@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 from contextlib import asynccontextmanager
 
 from .data_access.connection import get_db_connection, initialize_db
-from .routers import graph, chat, settings, ollama, files
+from .routers import graph, chat, settings, ollama, files, meeting
 
 load_dotenv()
 
@@ -43,6 +43,7 @@ app.include_router(chat.router)
 app.include_router(settings.router)
 app.include_router(ollama.router)
 app.include_router(files.router)
+app.include_router(meeting.router)
 
 @app.get("/")
 def read_root():
