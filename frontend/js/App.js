@@ -355,11 +355,11 @@ class App {
         const isIdeaNode = !this.activeWorkspaceNode;
         const confirmationMessage = isIdeaNode
           ? `Are you sure you want to delete the entire idea "${node.data(
-              "label"
-            )}" and all its contents? This cannot be undone.`
+            "label"
+          )}" and all its contents? This cannot be undone.`
           : `Are you sure you want to delete the node "${node.data(
-              "label"
-            )}"? This cannot be undone.`;
+            "label"
+          )}"? This cannot be undone.`;
 
         if (!confirm(confirmationMessage)) {
           return;
@@ -663,9 +663,8 @@ class App {
     });
 
     const rect = this.workspaceChatInput.getBoundingClientRect();
-    this.workspaceMentionMenu.style.bottom = `${
-      window.innerHeight - rect.top + 5
-    }px`; // Above input
+    this.workspaceMentionMenu.style.bottom = `${window.innerHeight - rect.top + 5
+      }px`; // Above input
     this.workspaceMentionMenu.style.left = `${rect.left}px`;
     this.workspaceMentionMenu.style.display = "block";
   }
@@ -729,6 +728,7 @@ class App {
         attachmentPathForThisMessage,
         modelName
       );
+      thinkingIndicator.classList.add("thinking-bubble");
 
       try {
         const payload = {
@@ -741,6 +741,7 @@ class App {
         const response = await this.api.sendMessage(payload);
         const textSpan = thinkingIndicator.querySelector(".message-content");
         if (textSpan) textSpan.textContent = response.response;
+        thinkingIndicator.classList.remove("thinking-bubble");
         this.chatHistory.push({
           role: "model",
           parts: [response.response],
@@ -750,6 +751,7 @@ class App {
         thinkingIndicator.querySelector(
           ".message-content"
         ).textContent = `Error: ${error.message}`;
+        thinkingIndicator.classList.remove("thinking-bubble");
       } finally {
         submitBtn.disabled = false;
         if (attachmentPathForThisMessage) {
@@ -769,6 +771,7 @@ class App {
         attachmentPathForThisMessage,
         modelName
       );
+      bubble.classList.add("thinking-bubble");
       activeBubbles[modelName] = bubble;
     });
 
@@ -795,6 +798,7 @@ class App {
           const textSpan =
             activeBubbles[model].querySelector(".message-content");
           if (textSpan) textSpan.textContent = data.response;
+          activeBubbles[model].classList.remove("thinking-bubble");
         }
       },
       // onComplete callback

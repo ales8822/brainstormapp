@@ -918,30 +918,21 @@ h3 {
 }
 
 /* Menu Styles */
-.participant-menu {
-  position: absolute;
-  background-color: white;
-  border: 1px solid #dfe6e9;
-  border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-  z-index: 1001;
-  max-height: 200px;
-  overflow-y: auto;
+.thinking-bubble {
+  animation: pulse 1.5s infinite ease-in-out;
+  opacity: 0.8;
 }
 
-#workspace-participant-menu-list>div,
-.mention-item {
-  padding: 8px 15px;
-  cursor: pointer;
-  font-size: 14px;
-  border-bottom: 1px solid #f1f1f1;
-}
+@keyframes pulse {
+  0% {
+    opacity: 0.5;
+  }
 
-#workspace-participant-menu-list>div:last-child {
-  border-bottom: none;
-}
+  50% {
+    opacity: 1;
+  }
 
-#workspace-participant-menu-list>div:hover,
-.mention-item:hover {
-  background-color: #f8f9fa;
+  100% {
+    opacity: 0.5;
+  }
 }
