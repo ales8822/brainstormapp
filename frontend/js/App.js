@@ -10,6 +10,8 @@ class App {
 
     this.workspace = new IdeaWorkspace(this.api);
     this.settings = new SettingsModal(this.api);
+    this.meetingHistory = new MeetingHistory(this.api, this);
+    this.currentMeetingId = null;
     this.settings.currentSettings = {};
 
     this.promptInput = document.getElementById("prompt-input");
@@ -461,7 +463,8 @@ class App {
   async streamMeeting(userMessage) {
     const payload = {
       ...this.currentMeetingContext,
-      user_message: userMessage
+      user_message: userMessage,
+      meeting_id: this.currentMeetingId
     };
 
     // Track thinking bubbles
@@ -486,6 +489,12 @@ class App {
           if (line.trim()) {
             try {
               const data = JSON.parse(line);
+
+              // Handle Meta Messages
+              if (data.type === "meta" && data.meeting_id) {
+                this.currentMeetingId = data.meeting_id;
+                continue;
+              }
 
               // Handle Thinking Messages
               if (data.agent_name === "system" && data.response_text.includes("is thinking")) {
@@ -561,7 +570,8 @@ class App {
         body: JSON.stringify({
           topic: this.currentMeetingContext.topic,
           company_context: this.currentMeetingContext.company_context,
-          transcript: transcript
+          transcript: transcript,
+          meeting_id: this.currentMeetingId
         })
       });
 
@@ -583,6 +593,52 @@ class App {
       this.endMeetingBtn.textContent = "End Meeting & Generate Minutes";
       // Don't close panel on error so user can try again
     }
+  }
+
+  restoreMeeting(details) {
+    // 1. Set context
+    this.meetingTopicInput.value = details.topic;
+    this.companyContextInput.value = details.company_context || "";
+    this.currentMeetingId = details.id;
+    this.currentMeetingContext = {
+      topic: details.topic,
+      company_context: details.company_context,
+      history: []
+    };
+
+    // 2. Clear transcript
+    this.meetingTranscript.innerHTML = "";
+
+    // 3. Restore messages
+    details.messages.forEach(msg => {
+      this.appendMeetingMessage(msg.role, msg.content, msg.agent_name);
+
+      // Rebuild history
+      if (msg.role === "user") {
+        this.currentMeetingContext.history.push({ role: "user", parts: [msg.content] });
+      } else if (msg.role === "model") {
+        this.currentMeetingContext.history.push({ role: "model", parts: [`${msg.agent_name}: ${msg.content}`] });
+      }
+    });
+
+    // 4. Restore minutes if any
+    if (details.minutes_text) {
+      this.currentMeetingMinutes = details.minutes_text;
+      this.displayMeetingMinutes(details.minutes_text);
+
+      // Show minutes panel
+      this.meetingInProgressPanel.style.display = "none";
+      this.meetingMinutesPanel.style.display = "block";
+    } else {
+      // Show meeting panel
+      this.meetingInProgressPanel.style.display = "flex";
+      this.meetingMinutesPanel.style.display = "none";
+    }
+
+    // 5. Switch view
+    this.overviewView.style.display = "none";
+    this.workspaceView.style.display = "none";
+    this.meetingBoardView.style.display = "flex";
   }
 
   handlePromoteMinutes() {
@@ -664,7 +720,8 @@ class App {
         topic: this.meetingTopicInput.value.trim(),
         company_context: this.companyContextInput.value.trim(),
         minutes: this.currentMeetingMinutes,
-        query: query
+        query: query,
+        meeting_id: this.currentMeetingId
       };
 
       const data = await this.api.querySecretary(payload);
@@ -918,6 +975,35 @@ class App {
 
   enterMeetingBoard() {
     console.log("Entering Meeting Board...");
+
+    // Reset meeting state for a fresh start
+    this.currentMeetingId = null;
+    this.currentMeetingContext = null;
+    this.currentMeetingMinutes = "";
+    this.meetingAgents = {};
+
+    // Clear inputs
+    this.meetingTopicInput.value = "";
+    this.companyContextInput.value = "";
+    this.meetingTranscript.innerHTML = "";
+    this.secretaryChatMessages.innerHTML = "";
+    this.secretaryQueryInput.value = "";
+
+    // Clear attachment
+    this.meetingAttachmentInput.value = "";
+    this.meetingAttachmentPreview.innerHTML = "";
+    this.currentMeetingAttachmentPath = null;
+
+    // Show briefing panel, hide others
+    this.briefingPanel.style.display = "block";
+    this.boardAssemblyPanel.style.display = "none";
+    this.meetingInProgressPanel.style.display = "none";
+    this.meetingMinutesPanel.style.display = "none";
+
+    // Re-initialize chairs
+    this.initializeBoardChairs();
+
+    // Show the meeting board view
     this.workspaceView.style.display = "none";
     this.meetingBoardView.style.display = "flex";
   }

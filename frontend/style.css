@@ -1700,3 +1700,11 @@ h3 {
   padding: 10px 20px;
   white-space: nowrap;
 }
+
+#new-meeting-button {
+  left: 80px;
+}
+
+#meeting-history-button {
+  left: 140px;
+}

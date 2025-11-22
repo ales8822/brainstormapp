@@ -1,12 +1,21 @@
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
-from ..schemas import MeetingRequest, SecretaryQueryRequest, MeetingMinutesRequest
+from ..schemas import MeetingRequest, SecretaryQueryRequest, MeetingMinutesRequest, MeetingSummaryResponse, MeetingDetailResponse
 from ..services.llm_service import LLMService
 from ..dependencies import get_llm_service
+from ..data_access.connection import get_db_connection
+from ..repositories.meeting_repository import MeetingRepository
 import asyncio
 import json
+import uuid
+import aiosqlite
+from typing import List
 
 router = APIRouter(prefix="/api/meetings", tags=["meetings"])
+
+# Dependency for MeetingRepository
+async def get_meeting_repo(db: aiosqlite.Connection = Depends(get_db_connection)):
+    return MeetingRepository(db)
 
 # Hardcoded personas for now
 PERSONAS = {
@@ -28,13 +37,31 @@ def get_persona(agent_name: str) -> str:
     return "You are a helpful AI board member. Provide constructive input."
 
 @router.post("/run")
-async def run_meeting(request: MeetingRequest, llm_service: LLMService = Depends(get_llm_service)):
+async def run_meeting(
+    request: MeetingRequest, 
+    llm_service: LLMService = Depends(get_llm_service),
+    meeting_repo: MeetingRepository = Depends(get_meeting_repo)
+):
     
     async def stream_generator():
+        meeting_id = request.meeting_id
+        
+        # If no meeting_id, create a new meeting
+        if not meeting_id:
+            meeting_id = str(uuid.uuid4())
+            await meeting_repo.create_meeting(
+                meeting_id, request.topic, request.company_context, request.agents
+            )
+            # Send meeting_id to frontend
+            yield json.dumps({"type": "meta", "meeting_id": meeting_id}) + "\n"
+        
         # If no user message, just acknowledge start
         if not request.user_message:
              yield json.dumps({"agent_name": "system", "response_text": f"Meeting started: {request.topic}. The board is ready for your questions."}) + "\n"
              return
+
+        # Save user message
+        await meeting_repo.add_message(meeting_id, "user", "User", request.user_message)
 
         history_dicts = [{"role": h.role, "parts": h.parts} for h in request.history]
         
@@ -58,6 +85,9 @@ async def run_meeting(request: MeetingRequest, llm_service: LLMService = Depends
                     user_message=request.user_message
                 )
                 
+                # Save agent response
+                await meeting_repo.add_message(meeting_id, "model", agent_name, response_text)
+                
                 yield json.dumps({"agent_name": agent_name, "response_text": response_text}) + "\n"
                 
             except Exception as e:
@@ -67,13 +97,21 @@ async def run_meeting(request: MeetingRequest, llm_service: LLMService = Depends
     return StreamingResponse(stream_generator(), media_type="application/x-ndjson")
 
 @router.post("/minutes")
-async def generate_minutes(request: MeetingMinutesRequest, llm_service: LLMService = Depends(get_llm_service)):
+async def generate_minutes(
+    request: MeetingMinutesRequest, 
+    llm_service: LLMService = Depends(get_llm_service),
+    meeting_repo: MeetingRepository = Depends(get_meeting_repo)
+):
     try:
         minutes = await llm_service.synthesize_meeting_minutes(
             topic=request.topic,
             company_context=request.company_context,
             transcript=request.transcript
         )
+        
+        if request.meeting_id:
+            await meeting_repo.update_minutes(request.meeting_id, minutes)
+            
         return {"minutes": minutes}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -95,3 +133,18 @@ async def query_secretary(request: SecretaryQueryRequest, llm_service: LLMServic
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/history", response_model=List[MeetingSummaryResponse])
+async def get_meeting_history(meeting_repo: MeetingRepository = Depends(get_meeting_repo)):
+    try:
+        return await meeting_repo.get_all_meetings()
+    except Exception as e:
+        print(f"ERROR fetching history: {e}")
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
+@router.get("/history/{meeting_id}", response_model=MeetingDetailResponse)
+async def get_meeting_detail(meeting_id: str, meeting_repo: MeetingRepository = Depends(get_meeting_repo)):
+    meeting = await meeting_repo.get_meeting_details(meeting_id)
+    if not meeting:
+        raise HTTPException(status_code=404, detail="Meeting not found")
+    return meeting

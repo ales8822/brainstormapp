@@ -277,4 +277,12 @@ class ApiService {
       throw error;
     }
   }
+
+  getMeetingHistory() {
+    return this._fetch("/meetings/history");
+  }
+
+  getMeetingDetails(meetingId) {
+    return this._fetch(`/meetings/history/${meetingId}`);
+  }
 }
