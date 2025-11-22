@@ -94,6 +94,9 @@ class App {
     this.briefingPanel = document.getElementById("briefing-panel");
     this.meetingAttachmentInput = document.getElementById("meeting-attachment");
     this.meetingAttachmentPreview = document.getElementById("meeting-attachment-preview");
+    this.meetingUserQuestion = document.getElementById("meeting-user-question");
+    this.sendMeetingQuestionBtn = document.getElementById("send-meeting-question-btn");
+    this.endMeetingBtn = document.getElementById("end-meeting-btn");
 
     // --- BOARD ASSEMBLY REFS ---
     this.boardAssemblyPanel = document.getElementById("board-assembly-panel");
@@ -343,18 +346,16 @@ class App {
     this.setContextBtn.addEventListener("click", () =>
       this.handleSetContext()
     );
-
     this.startMeetingBtn.addEventListener("click", () =>
       this.handleStartMeeting()
     );
 
-    this.meetingAttachmentInput.addEventListener("change", (e) =>
-      this.handleMeetingAttachment(e)
-    );
-
-    this.pauseMeetingBtn.addEventListener("click", () =>
-      this.handleEndMeeting()
-    );
+    this.meetingAttachmentInput.addEventListener("change", () => this.handleMeetingAttachment());
+    this.sendMeetingQuestionBtn.addEventListener("click", () => this.handleSendMeetingQuestion());
+    this.meetingUserQuestion.addEventListener("keypress", (e) => {
+      if (e.key === "Enter") this.handleSendMeetingQuestion();
+    });
+    this.endMeetingBtn.addEventListener("click", () => this.handleEndMeeting());
 
     this.promoteMinutesBtn.addEventListener("click", () =>
       this.handlePromoteMinutes()
@@ -375,8 +376,8 @@ class App {
     );
   }
 
-  handleMeetingAttachment(e) {
-    const file = e.target.files[0];
+  handleMeetingAttachment() {
+    const file = this.meetingAttachmentInput.files[0];
     if (!file) {
       this.meetingAttachmentPreview.innerHTML = "";
       return;
@@ -391,22 +392,14 @@ class App {
   }
 
   async handleStartMeeting() {
-    console.log("Starting Meeting...");
-    this.boardAssemblyPanel.style.display = "none";
-    this.meetingInProgressPanel.style.display = "flex";
+    const topic = this.meetingTopicInput.value;
+    const context = this.companyContextInput.value;
+    const agents = Array.from(
+      document.querySelectorAll(".chair.occupied")
+    ).map((chair) => chair.dataset.agent);
 
-    this.activeMeetingTopic.textContent = this.displayTopic.textContent;
-    this.meetingTranscript.innerHTML = ""; // Clear transcript
-
-    // Get the topic and context
-    const topic = this.meetingTopicInput.value.trim();
-    const context = this.companyContextInput.value.trim();
-
-    // Get agents in order (from meetingAgents object)
-    const agents = Object.values(this.meetingAgents);
-
-    if (agents.length === 0) {
-      this.appendMeetingMessage("system", "No agents selected. Please go back and add agents.");
+    if (!topic || !context || agents.length === 0) {
+      alert("Please fill in all fields and select at least one agent.");
       return;
     }
 
@@ -426,87 +419,169 @@ class App {
       }
     }
 
-    // Create payload
-    const payload = {
-      topic: topic,
+    // Store meeting context
+    this.currentMeetingContext = {
+      topic,
       company_context: context,
-      agents: agents,
-      attachment_path: attachmentPath
+      agents,
+      attachment_path: attachmentPath,
+      history: []
     };
 
-    // Track active bubbles for each agent
-    const activeBubbles = {};
+    // Switch UI
+    this.briefingPanel.classList.add("hidden");
+    this.boardAssemblyPanel.style.display = "none";
+    this.meetingInProgressPanel.style.display = "flex";
+    this.meetingTranscript.innerHTML = "";
+    document.getElementById("active-meeting-topic").textContent = topic;
 
-    // Stream the meeting
-    this.api.streamMeeting(
-      payload,
-      (data) => {
-        if (data.error) {
-          this.appendMeetingMessage("system", `Error: ${data.error}`);
-          return;
-        }
-
-        const { agent_name, response_text } = data;
-
-        // Handle system messages
-        if (agent_name === "system") {
-          this.appendMeetingMessage("system", response_text);
-          return;
-        }
-
-        // Handle AI Secretary (Meeting Minutes)
-        if (agent_name === "AI_SECRETARY") {
-          this.currentMeetingMinutes = response_text;
-          this.displayMeetingMinutes(response_text);
-          return;
-        }
-
-        // Check if this is a "thinking" message
-        if (response_text && response_text.includes("is thinking")) {
-          // Create a thinking bubble
-          const bubble = document.createElement("div");
-          bubble.className = "chat-message assistant thinking";
-          bubble.innerHTML = `
-            <div class="message-header">${agent_name}</div>
-            <span class="message-content">Thinking...</span>
-          `;
-          this.meetingTranscript.appendChild(bubble);
-          this.meetingTranscript.scrollTop = this.meetingTranscript.scrollHeight;
-
-          // Store reference to update later
-          activeBubbles[agent_name] = bubble;
-        } else {
-          // This is the actual response
-          if (activeBubbles[agent_name]) {
-            // Update the existing bubble
-            const contentSpan = activeBubbles[agent_name].querySelector(".message-content");
-            if (contentSpan) {
-              contentSpan.textContent = response_text;
-            }
-            activeBubbles[agent_name].classList.remove("thinking");
-            delete activeBubbles[agent_name];
-          } else {
-            // No bubble exists, create a new message
-            this.appendMeetingMessage("assistant", response_text, agent_name);
-          }
-
-          this.meetingTranscript.scrollTop = this.meetingTranscript.scrollHeight;
-        }
-      },
-      () => {
-        console.log("Meeting stream completed");
-        this.appendMeetingMessage("system", "Meeting concluded.");
-      }
-    );
+    this.appendMeetingMessage("system", `Meeting started: ${topic}`);
+    this.appendMeetingMessage("system", "The board is ready. Please ask your question.");
   }
 
-  handleEndMeeting() {
-    if (confirm("Are you sure you want to end the meeting?")) {
+  async handleSendMeetingQuestion() {
+    const question = this.meetingUserQuestion.value.trim();
+    if (!question) return;
+
+    this.appendMeetingMessage("user", question);
+    this.meetingUserQuestion.value = "";
+
+    // Disable input while waiting
+    this.meetingUserQuestion.disabled = true;
+    this.sendMeetingQuestionBtn.disabled = true;
+
+    await this.streamMeeting(question);
+
+    // Re-enable input
+    this.meetingUserQuestion.disabled = false;
+    this.sendMeetingQuestionBtn.disabled = false;
+    this.meetingUserQuestion.focus();
+  }
+
+  async streamMeeting(userMessage) {
+    const payload = {
+      ...this.currentMeetingContext,
+      user_message: userMessage
+    };
+
+    // Track thinking bubbles
+    const thinkingBubbles = {};
+
+    try {
+      const response = await fetch(`${this.api.baseUrl}/meetings/run`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const chunk = decoder.decode(value);
+        const lines = chunk.split("\n");
+        for (const line of lines) {
+          if (line.trim()) {
+            try {
+              const data = JSON.parse(line);
+
+              // Handle Thinking Messages
+              if (data.agent_name === "system" && data.response_text.includes("is thinking")) {
+                const agentName = data.related_agent || data.response_text.split(" is thinking")[0];
+                const bubble = this.appendMeetingMessage("system", data.response_text);
+                if (bubble) {
+                  bubble.style.opacity = "0.7";
+                  thinkingBubbles[agentName] = bubble;
+                }
+                continue;
+              }
+
+              // Handle Real Responses
+              if (data.agent_name !== "system") {
+                // Remove thinking bubble
+                if (thinkingBubbles[data.agent_name]) {
+                  thinkingBubbles[data.agent_name].remove();
+                  delete thinkingBubbles[data.agent_name];
+                }
+
+                this.appendMeetingMessage(data.agent_name, data.response_text, data.agent_name);
+
+                // Add to history
+                this.currentMeetingContext.history.push({ role: "model", parts: [`${data.agent_name}: ${data.response_text}`] });
+              } else {
+                // Other system messages
+                this.appendMeetingMessage("system", data.response_text);
+              }
+
+            } catch (e) {
+              console.error("Error parsing stream:", e);
+            }
+          }
+        }
+      }
+
+      // Add user message to history
+      this.currentMeetingContext.history.push({ role: "user", parts: [userMessage] });
+
+    } catch (error) {
+      console.error("Meeting stream error:", error);
+      this.appendMeetingMessage("system", "Error communicating with the board.");
+    }
+  }
+
+  async handleEndMeeting() {
+    if (!confirm("Are you sure you want to end the meeting and generate minutes?")) return;
+
+    this.endMeetingBtn.disabled = true;
+    this.endMeetingBtn.textContent = "Generating Minutes...";
+    this.appendMeetingMessage("system", "Meeting ended. Generating minutes, please wait...");
+
+    const transcript = this.currentMeetingContext.history.map(msg => {
+      let agent = "User";
+      let statement = msg.parts[0];
+
+      if (msg.role === "model") {
+        const parts = statement.split(": ");
+        if (parts.length > 1) {
+          agent = parts[0];
+          statement = parts.slice(1).join(": ");
+        } else {
+          agent = "AI";
+        }
+      }
+      return { agent, statement };
+    });
+
+    try {
+      const response = await fetch(`${this.api.baseUrl}/meetings/minutes`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          topic: this.currentMeetingContext.topic,
+          company_context: this.currentMeetingContext.company_context,
+          transcript: transcript
+        })
+      });
+
+      const data = await response.json();
+
       this.meetingInProgressPanel.style.display = "none";
-      this.briefingPanel.style.display = "block"; // Go back to start
-      // Reset state if needed
-      this.meetingMinutesPanel.style.display = "none";
-      this.currentMeetingMinutes = "";
+      this.meetingMinutesPanel.style.display = "block";
+      this.currentMeetingMinutes = data.minutes;
+      this.displayMeetingMinutes(data.minutes);
+
+      // Reset button state
+      this.endMeetingBtn.disabled = false;
+      this.endMeetingBtn.textContent = "End Meeting & Generate Minutes";
+
+    } catch (error) {
+      console.error("Error generating minutes:", error);
+      alert("Failed to generate minutes.");
+      this.endMeetingBtn.disabled = false;
+      this.endMeetingBtn.textContent = "End Meeting & Generate Minutes";
+      // Don't close panel on error so user can try again
     }
   }
 
@@ -519,7 +594,7 @@ class App {
     // Create a new node with the minutes
     const topic = this.meetingTopicInput.value.trim() || "Meeting Minutes";
     const newNode = {
-      label: `📋 ${topic}`,
+      label: `📋 ${topic} `,
       fullText: this.currentMeetingMinutes,
       x: Math.random() * 400 + 100,
       y: Math.random() * 300 + 100
@@ -548,7 +623,7 @@ class App {
     const a = document.createElement("a");
     a.href = url;
     const topic = this.meetingTopicInput.value.trim() || "meeting";
-    const filename = `${topic.replace(/\s+/g, '_')}_minutes.md`;
+    const filename = `${topic.replace(/\s+/g, '_')} _minutes.md`;
     a.download = filename;
 
     // Trigger download
@@ -559,7 +634,7 @@ class App {
     // Clean up
     URL.revokeObjectURL(url);
 
-    alert(`Minutes exported as ${filename}`);
+    alert(`Minutes exported as ${filename} `);
   }
 
   async handleSecretaryQuery() {
@@ -602,13 +677,13 @@ class App {
 
     } catch (error) {
       loadingMsg.remove();
-      this.appendSecretaryMessage("assistant", `Error: ${error.message}`);
+      this.appendSecretaryMessage("assistant", `Error: ${error.message} `);
     }
   }
 
   appendSecretaryMessage(role, text) {
     const msg = document.createElement("div");
-    msg.className = `secretary-chat-message ${role}`;
+    msg.className = `secretary - chat - message ${role} `;
     msg.textContent = text;
 
     this.secretaryChatMessages.appendChild(msg);
@@ -619,9 +694,10 @@ class App {
 
   appendMeetingMessage(role, text, agentName = null) {
     const msg = document.createElement("div");
+    // Fix class name to match CSS: chat-message
     msg.className = `chat-message ${role}`;
 
-    if (agentName) {
+    if (agentName && role !== "user") {
       const header = document.createElement("div");
       header.className = "message-header";
       header.textContent = agentName;
@@ -635,6 +711,7 @@ class App {
 
     this.meetingTranscript.appendChild(msg);
     this.meetingTranscript.scrollTop = this.meetingTranscript.scrollHeight;
+    return msg;
   }
 
   displayMeetingMinutes(markdownText) {
@@ -739,11 +816,12 @@ class App {
 
       if (agentName) {
         chair.classList.add("occupied");
+        chair.dataset.agent = agentName;
         chair.innerHTML = `
-           <div class="agent-avatar">${agentName.charAt(0)}</div>
-           <div class="agent-name">${agentName}</div>
-           <button class="remove-agent-btn" title="Remove">×</button>
-         `;
+            <div class="agent-avatar">${agentName.charAt(0)}</div>
+            <div class="agent-name">${agentName}</div>
+            <button class="remove-agent-btn" title="Remove">×</button>
+        `;
         chair.querySelector(".remove-agent-btn").onclick = (e) => {
           e.stopPropagation();
           this.handleRemoveAgent(index);
@@ -773,7 +851,7 @@ class App {
   }
 
   handleAddAgentClick(index, event) {
-    console.log(`Clicked chair ${index}`);
+    console.log(`Clicked chair ${index} `);
     this.showAgentMenu(index, event.clientX, event.clientY);
   }
 
@@ -814,8 +892,8 @@ class App {
       this.meetingAgentMenuList.appendChild(emptyMsg);
     }
 
-    this.meetingAgentMenu.style.left = `${x}px`;
-    this.meetingAgentMenu.style.top = `${y}px`;
+    this.meetingAgentMenu.style.left = `${x} px`;
+    this.meetingAgentMenu.style.top = `${y} px`;
     this.meetingAgentMenu.style.display = "block";
   }
 
@@ -853,7 +931,7 @@ class App {
   }
 
   async enterWorkspace(node) {
-    console.log(`Entering workspace for node: ${node.data("label")}`);
+    console.log(`Entering workspace for node: ${node.data("label")} `);
     this.activeWorkspaceNode = node;
     this.chatHistory = [];
     this.participants = [];
@@ -864,7 +942,7 @@ class App {
     this.workspaceGraph.rerunLayout();
     this.setupWorkspaceEventListeners();
     this.workspaceGraph.clear();
-    window.location.hash = `#/workspace/${node.id()}`;
+    window.location.hash = `# / workspace / ${node.id()} `;
 
     this.overviewView.style.display = "none";
     this.workspaceView.style.display = "flex";
@@ -967,10 +1045,12 @@ class App {
         const confirmationMessage = isIdeaNode
           ? `Are you sure you want to delete the entire idea "${node.data(
             "label"
-          )}" and all its contents? This cannot be undone.`
+          )
+          } " and all its contents? This cannot be undone.`
           : `Are you sure you want to delete the node "${node.data(
             "label"
-          )}"? This cannot be undone.`;
+          )
+          } "? This cannot be undone.`;
 
         if (!confirm(confirmationMessage)) {
           return;

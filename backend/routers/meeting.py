@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
-from ..schemas import MeetingRequest, SecretaryQueryRequest
+from ..schemas import MeetingRequest, SecretaryQueryRequest, MeetingMinutesRequest
 from ..services.llm_service import LLMService
 from ..dependencies import get_llm_service
 import asyncio
@@ -31,16 +31,19 @@ def get_persona(agent_name: str) -> str:
 async def run_meeting(request: MeetingRequest, llm_service: LLMService = Depends(get_llm_service)):
     
     async def stream_generator():
-        history = []
-        transcript = []  # Collect transcript for minutes
-        
-        # Initial system message
-        yield json.dumps({"agent_name": "system", "response_text": f"Meeting started: {request.topic}"}) + "\n"
+        # If no user message, just acknowledge start
+        if not request.user_message:
+             yield json.dumps({"agent_name": "system", "response_text": f"Meeting started: {request.topic}. The board is ready for your questions."}) + "\n"
+             return
+
+        history_dicts = [{"role": h.role, "parts": h.parts} for h in request.history]
         
         for agent_name in request.agents:
-            # Simulate thinking time
-            yield json.dumps({"agent_name": "system", "response_text": f"{agent_name} is thinking..."}) + "\n"
-            await asyncio.sleep(1) 
+            yield json.dumps({
+                "agent_name": "system", 
+                "response_text": f"{agent_name} is thinking...",
+                "related_agent": agent_name
+            }) + "\n"
             
             persona = get_persona(agent_name)
             
@@ -50,44 +53,30 @@ async def run_meeting(request: MeetingRequest, llm_service: LLMService = Depends
                     company_context=request.company_context,
                     agent_name=agent_name,
                     persona_prompt=persona,
-                    history=history,
-                    attachment_path=request.attachment_path
+                    history=history_dicts,
+                    attachment_path=request.attachment_path,
+                    user_message=request.user_message
                 )
-                
-                # Add to history for context in next turns
-                history.append({"role": "user", "parts": [f"{agent_name} said: {response_text}"]})
-                
-                # Add to transcript for minutes
-                transcript.append({"agent": agent_name, "statement": response_text})
                 
                 yield json.dumps({"agent_name": agent_name, "response_text": response_text}) + "\n"
                 
             except Exception as e:
                 error_msg = f"Error from {agent_name}: {str(e)}"
                 yield json.dumps({"agent_name": "system", "response_text": error_msg}) + "\n"
-                transcript.append({"agent": "System", "statement": error_msg})
-            
-            await asyncio.sleep(1) # Pause between turns
-
-        # Generate meeting minutes
-        yield json.dumps({"agent_name": "system", "response_text": "AI Secretary is preparing meeting minutes..."}) + "\n"
-        
-        try:
-            minutes = await llm_service.synthesize_meeting_minutes(
-                topic=request.topic,
-                company_context=request.company_context,
-                transcript=transcript
-            )
-            
-            # Send the minutes with a special agent_name
-            yield json.dumps({"agent_name": "AI_SECRETARY", "response_text": minutes}) + "\n"
-            
-        except Exception as e:
-            yield json.dumps({"agent_name": "system", "response_text": f"Error generating minutes: {str(e)}"}) + "\n"
-
-        yield json.dumps({"agent_name": "system", "response_text": "Meeting adjourned."}) + "\n"
 
     return StreamingResponse(stream_generator(), media_type="application/x-ndjson")
+
+@router.post("/minutes")
+async def generate_minutes(request: MeetingMinutesRequest, llm_service: LLMService = Depends(get_llm_service)):
+    try:
+        minutes = await llm_service.synthesize_meeting_minutes(
+            topic=request.topic,
+            company_context=request.company_context,
+            transcript=request.transcript
+        )
+        return {"minutes": minutes}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/query-secretary")
 async def query_secretary(request: SecretaryQueryRequest, llm_service: LLMService = Depends(get_llm_service)):
