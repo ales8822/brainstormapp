@@ -415,7 +415,9 @@ class App {
     if (this.meetingAttachmentInput.files.length > 0) {
       try {
         this.appendMeetingMessage("system", "Uploading attachment...");
-        const uploadResult = await this.api.uploadFile(this.meetingAttachmentInput.files[0]);
+        const formData = new FormData();
+        formData.append("file", this.meetingAttachmentInput.files[0]);
+        const uploadResult = await this.api.uploadFile(formData);
         attachmentPath = uploadResult.filePath;
         this.appendMeetingMessage("system", "Attachment uploaded successfully.");
       } catch (error) {
