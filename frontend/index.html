@@ -77,6 +77,7 @@
       <div id="settings-button" class="settings-icon">⚙️</div>
       <div id="new-meeting-button" class="meeting-icon" title="New Meeting">📅</div>
       <div id="meeting-history-button" class="meeting-icon" title="Meeting History">📜</div>
+      <div id="agent-manager-button" class="meeting-icon" title="Manage Agents">🎭</div>
       <div id="active-model-display">Active AI: Loading...</div>
     </div>
     <div id="cy"></div>
@@ -371,6 +372,72 @@
     </div>
   </div>
 
+  <!-- === AGENT MANAGER MODAL === -->
+  <div id="agent-manager-modal" class="modal-overlay" style="display: none;">
+    <div class="modal-content" style="width: 700px; max-height: 85vh; display: flex; flex-direction: column;">
+      <h2>🎭 Agent Manager</h2>
+
+      <!-- List View -->
+      <div id="agent-list" style="flex: 1; overflow-y: auto; margin-bottom: 15px;">
+        <!-- Agent cards will be injected here -->
+      </div>
+
+      <!-- Editor View -->
+      <div id="agent-editor" style="display: none; flex: 1; overflow-y: auto;">
+        <form id="agent-form">
+          <div style="margin-bottom: 15px;">
+            <label style="display: block; margin-bottom: 5px; color: #ecf0f1; font-weight: bold;">Name *</label>
+            <input type="text" id="agent-name" required
+              style="width: 100%; padding: 10px; background-color: #2d2d2d; border: 1px solid #444; color: #fff; border-radius: 6px;">
+          </div>
+
+          <div style="margin-bottom: 15px;">
+            <label style="display: block; margin-bottom: 5px; color: #ecf0f1; font-weight: bold;">Role *</label>
+            <input type="text" id="agent-role" required placeholder="e.g., Critic, Optimist, Devil's Advocate"
+              style="width: 100%; padding: 10px; background-color: #2d2d2d; border: 1px solid #444; color: #fff; border-radius: 6px;">
+          </div>
+
+          <div style="margin-bottom: 15px;">
+            <label style="display: block; margin-bottom: 5px; color: #ecf0f1; font-weight: bold;">System Instructions
+              *</label>
+            <textarea id="agent-instructions" required rows="6"
+              placeholder="Define the agent's personality, behavior, and speaking style..."
+              style="width: 100%; padding: 10px; background-color: #2d2d2d; border: 1px solid #444; color: #fff; border-radius: 6px; resize: vertical;"></textarea>
+          </div>
+
+          <div style="display: flex; gap: 15px; margin-bottom: 15px;">
+            <div style="flex: 1;">
+              <label style="display: block; margin-bottom: 5px; color: #ecf0f1; font-weight: bold;">Model</label>
+              <select id="agent-model"
+                style="width: 100%; padding: 10px; background-color: #2d2d2d; border: 1px solid #444; color: #fff; border-radius: 6px;">
+                <option value="gemini">Gemini (Cloud)</option>
+                <option value="ollama">Ollama (Local)</option>
+              </select>
+            </div>
+
+            <div style="flex: 1;">
+              <label style="display: block; margin-bottom: 5px; color: #ecf0f1; font-weight: bold;">Avatar Color</label>
+              <input type="color" id="agent-color" value="#3498db"
+                style="width: 100%; height: 42px; background-color: #2d2d2d; border: 1px solid #444; border-radius: 6px; cursor: pointer;">
+            </div>
+          </div>
+        </form>
+      </div>
+
+      <div class="modal-actions" style="display: flex; gap: 10px; justify-content: space-between;">
+        <div>
+          <button id="new-agent-btn" class="action-btn">+ New Agent</button>
+          <button id="back-to-agent-list-btn" class="secondary-btn" style="display: none;">← Back to List</button>
+        </div>
+        <div style="display: flex; gap: 10px;">
+          <button id="delete-agent-btn" class="danger-btn" style="display: none;">Delete</button>
+          <button id="save-agent-btn" class="action-btn" style="display: none;">Save Agent</button>
+          <button id="agent-manager-close-btn" class="secondary-btn">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- === IDEA WORKSPACE MODAL === -->
   <div id="idea-modal" class="modal-overlay" style="display: none">
     <div class="modal-content">
@@ -477,6 +544,7 @@
       .then(() => loadScript("js/components/GraphManager.js"))
       .then(() => loadScript("js/components/SettingsModal.js"))
       .then(() => loadScript("js/components/MeetingHistory.js"))
+      .then(() => loadScript("js/components/AgentManager.js"))
       .then(() => loadScript("js/components/IdeaWorkspace.js"))
       .then(() => loadScript("js/App.js"))
       .then(() => {

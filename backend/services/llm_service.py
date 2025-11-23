@@ -601,3 +601,29 @@ class LLMService:
             return await self._get_gemini_chat([], query, system_prompt)
         except Exception as e:
             return f"I apologize, but I encountered an error: {str(e)}"
+
+    async def run_meeting_turn(
+        self, 
+        topic: str, 
+        company_context: str, 
+        agent_name: str, 
+        persona_prompt: str, 
+        history: List[Dict] = [], 
+        attachment_path: str = None, 
+        user_message: str = None,
+        model_provider: str = "gemini"
+    ) -> str:
+        """
+        Executes a single turn in a meeting for a specific agent.
+        Uses the agent's custom system instructions and preferred model.
+        """
+        system_prompt = f"Your Persona: {persona_prompt}\nMeeting Topic: {topic}\nCompany Context: {company_context}\nYour Goal: Provide a concise, insightful contribution based on your persona. Keep your response under 100 words."
+        user_trigger = user_message if user_message else "It is your turn to speak. Please provide your input."
+        
+        # Use the specified model_provider
+        if model_provider == 'gemini':
+            return await self._get_gemini_chat(history, user_trigger, system_prompt, attachment_path)
+        else:  # ollama
+            # For Ollama, get the configured model name
+            ollama_model = await self.settings_service.get_setting('ollama_model_name', 'llama3')
+            return await self._get_ollama_chat(ollama_model, history, user_trigger, system_prompt, attachment_path)

@@ -285,4 +285,35 @@ class ApiService {
   getMeetingDetails(meetingId) {
     return this._fetch(`/meetings/history/${meetingId}`);
   }
+
+  // --- Agent Management ---
+  getAgents() {
+    return this._fetch("/agents");
+  }
+
+  getAgent(agentId) {
+    return this._fetch(`/agents/${agentId}`);
+  }
+
+  createAgent(payload) {
+    return this._fetch("/agents", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+  }
+
+  updateAgent(agentId, payload) {
+    return this._fetch(`/agents/${agentId}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+  }
+
+  deleteAgent(agentId) {
+    return this._fetch(`/agents/${agentId}`, {
+      method: "DELETE",
+    });
+  }
 }

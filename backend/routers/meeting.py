@@ -65,6 +65,10 @@ async def run_meeting(
 
         history_dicts = [{"role": h.role, "parts": h.parts} for h in request.history]
         
+        # Import AgentRepository
+        from ..repositories.agent_repository import AgentRepository
+        agent_repo = AgentRepository(meeting_repo.db)
+        
         for agent_name in request.agents:
             yield json.dumps({
                 "agent_name": "system", 
@@ -72,7 +76,16 @@ async def run_meeting(
                 "related_agent": agent_name
             }) + "\n"
             
-            persona = get_persona(agent_name)
+            # Fetch custom agent from database
+            agent_data = await agent_repo.get_agent_by_name(agent_name)
+            
+            if agent_data:
+                persona = agent_data['system_instructions']
+                model_provider = agent_data['model_provider']
+            else:
+                # Fallback if agent not found
+                persona = f"You are {agent_name}, a helpful AI board member. Provide constructive input."
+                model_provider = "gemini"
             
             try:
                 response_text = await llm_service.run_meeting_turn(
@@ -82,7 +95,8 @@ async def run_meeting(
                     persona_prompt=persona,
                     history=history_dicts,
                     attachment_path=request.attachment_path,
-                    user_message=request.user_message
+                    user_message=request.user_message,
+                    model_provider=model_provider  # Pass the agent's preferred model
                 )
                 
                 # Save agent response

@@ -11,6 +11,7 @@ class App {
     this.workspace = new IdeaWorkspace(this.api);
     this.settings = new SettingsModal(this.api);
     this.meetingHistory = new MeetingHistory(this.api, this);
+    this.agentManager = new AgentManager(this.api);
     this.currentMeetingId = null;
     this.settings.currentSettings = {};
 
@@ -839,7 +840,6 @@ class App {
 
   initializeBoardChairs() {
     this.chairsContainer.innerHTML = "";
-    this.chairsContainer.innerHTML = "";
     // Define 6 positions around the oval table
     // Ellipse formula: x = a * cos(t), y = b * sin(t)
     // Table size: 600x250. Center is (400, 200) relative to container (800x400).
@@ -869,15 +869,19 @@ class App {
       chair.style.top = `${y}px`;
       chair.dataset.index = index;
 
-      const agentName = this.meetingAgents[index];
+      const agentObj = this.meetingAgents[index];
 
-      if (agentName) {
+      if (agentObj) {
+        const agentName = agentObj.name;
+        const agentData = agentObj.data;
+        const avatarColor = agentData?.avatar_color || "#3498db";
+
         chair.classList.add("occupied");
         chair.dataset.agent = agentName;
         chair.innerHTML = `
-            <div class="agent-avatar">${agentName.charAt(0)}</div>
-            <div class="agent-name">${agentName}</div>
-            <button class="remove-agent-btn" title="Remove">×</button>
+          <div class="agent-avatar" style="background-color: ${avatarColor};">${agentName.charAt(0)}</div>
+          <div class="agent-name">${agentName}</div>
+          <button class="remove-agent-btn" title="Remove">×</button>
         `;
         chair.querySelector(".remove-agent-btn").onclick = (e) => {
           e.stopPropagation();
@@ -912,50 +916,94 @@ class App {
     this.showAgentMenu(index, event.clientX, event.clientY);
   }
 
-  showAgentMenu(chairIndex, x, y) {
-    this.meetingAgentMenuList.innerHTML = "";
-    const availableModels = this.settings.availableModels || ["Gemini"]; // Fallback
+  async showAgentMenu(chairIndex, x, y) {
+    this.meetingAgentMenuList.innerHTML = "<div style='padding: 10px; color: #888;'>Loading agents...</div>";
 
-    availableModels.forEach((model) => {
-      // Don't show agents already seated
-      if (Object.values(this.meetingAgents).includes(model)) return;
+    try {
+      // Fetch custom agents from database
+      const agents = await this.api.getAgents();
 
-      const item = document.createElement("div");
-      item.className = "menu-item";
-      item.textContent = model;
-      item.style.padding = "10px";
-      item.style.cursor = "pointer";
-      item.style.borderBottom = "1px solid #444";
+      this.meetingAgentMenuList.innerHTML = "";
 
-      item.addEventListener("mouseenter", () => {
-        item.style.backgroundColor = "#3d3d3d";
-      });
-      item.addEventListener("mouseleave", () => {
-        item.style.backgroundColor = "transparent";
-      });
+      // Filter out already seated agents
+      const availableAgents = agents.filter(agent =>
+        !Object.values(this.meetingAgents).includes(agent.name)
+      );
 
-      item.addEventListener("click", () => {
-        this.handleSelectMeetingAgent(chairIndex, model);
-        this.meetingAgentMenu.style.display = "none";
-      });
-      this.meetingAgentMenuList.appendChild(item);
-    });
+      if (availableAgents.length === 0) {
+        const emptyMsg = document.createElement("div");
+        emptyMsg.textContent = "No more agents available";
+        emptyMsg.style.padding = "10px";
+        emptyMsg.style.color = "#999";
+        this.meetingAgentMenuList.appendChild(emptyMsg);
+      } else {
+        availableAgents.forEach((agent) => {
+          const item = document.createElement("div");
+          item.className = "menu-item";
+          item.style.padding = "10px";
+          item.style.cursor = "pointer";
+          item.style.borderBottom = "1px solid #444";
+          item.style.display = "flex";
+          item.style.alignItems = "center";
+          item.style.gap = "10px";
 
-    if (this.meetingAgentMenuList.children.length === 0) {
-      const emptyMsg = document.createElement("div");
-      emptyMsg.textContent = "No more agents available";
-      emptyMsg.style.padding = "10px";
-      emptyMsg.style.color = "#999";
-      this.meetingAgentMenuList.appendChild(emptyMsg);
+          // Avatar circle
+          const avatar = document.createElement("div");
+          avatar.style.cssText = `
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            background-color: ${agent.avatar_color};
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            color: white;
+            font-size: 0.9em;
+          `;
+          avatar.textContent = agent.name.charAt(0).toUpperCase();
+
+          // Agent info
+          const info = document.createElement("div");
+          info.style.flex = "1";
+          info.innerHTML = `
+            <div style="font-weight: bold; color: #ecf0f1;">${agent.name}</div>
+            <div style="font-size: 0.85em; color: #95a5a6;">${agent.role}</div>
+          `;
+
+          item.appendChild(avatar);
+          item.appendChild(info);
+
+          item.addEventListener("mouseenter", () => {
+            item.style.backgroundColor = "#3d3d3d";
+          });
+          item.addEventListener("mouseleave", () => {
+            item.style.backgroundColor = "transparent";
+          });
+
+          item.addEventListener("click", () => {
+            this.handleSelectMeetingAgent(chairIndex, agent.name, agent);
+            this.meetingAgentMenu.style.display = "none";
+          });
+          this.meetingAgentMenuList.appendChild(item);
+        });
+      }
+    } catch (error) {
+      console.error("Failed to load agents:", error);
+      this.meetingAgentMenuList.innerHTML = "<div style='padding: 10px; color: #e74c3c;'>Failed to load agents</div>";
     }
 
-    this.meetingAgentMenu.style.left = `${x} px`;
-    this.meetingAgentMenu.style.top = `${y} px`;
+    this.meetingAgentMenu.style.left = `${x}px`;
+    this.meetingAgentMenu.style.top = `${y}px`;
     this.meetingAgentMenu.style.display = "block";
   }
 
-  handleSelectMeetingAgent(chairIndex, agentName) {
-    this.meetingAgents[chairIndex] = agentName;
+  handleSelectMeetingAgent(chairIndex, agentName, agentData) {
+    // Store the full agent object for later use
+    this.meetingAgents[chairIndex] = {
+      name: agentName,
+      data: agentData
+    };
     this.initializeBoardChairs(); // Re-render
     this.updateStartButtonState();
   }

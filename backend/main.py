@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 from contextlib import asynccontextmanager
 
 from .data_access.connection import get_db_connection, initialize_db
-from .routers import graph, chat, settings, ollama, files, meeting
+from .routers import graph, chat, settings, ollama, files, meeting, agents
 
 load_dotenv()
 
@@ -16,9 +16,18 @@ async def lifespan(app: FastAPI):
 
     try:
         # --- CRITICAL: Run initialization exactly once ---
-        async with get_db_connection() as conn:
-            await initialize_db(conn)   # <-- THIS WAS MISSING
+        # get_db_connection is an async generator, so we need to iterate it manually
+        db_gen = get_db_connection()
+        conn = await db_gen.__anext__()
+        try:
+            await initialize_db(conn)
             print("Database initialized successfully (WAL, schema, etc)")
+        finally:
+            # Clean up the generator
+            try:
+                await db_gen.__anext__()
+            except StopAsyncIteration:
+                pass
     except Exception as e:
         print(f"FATAL: Could not initialize database: {e}")
 
@@ -44,6 +53,7 @@ app.include_router(settings.router)
 app.include_router(ollama.router)
 app.include_router(files.router)
 app.include_router(meeting.router)
+app.include_router(agents.router)
 
 @app.get("/")
 def read_root():
