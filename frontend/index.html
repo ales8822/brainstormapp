@@ -271,6 +271,10 @@
             <!-- Transcript messages will appear here -->
           </div>
           <div class="meeting-input-area" style="display: flex; gap: 10px; padding: 10px 20px 20px 20px;">
+            <select id="meeting-target-select"
+              style="padding: 12px; border-radius: 4px; border: 1px solid #444; background: #2d2d2d; color: white; max-width: 150px;">
+              <option value="all">All Agents</option>
+            </select>
             <input type="text" id="meeting-user-question" placeholder="Ask the board a question..." class="chat-input"
               style="flex: 1; padding: 12px; border-radius: 4px; border: 1px solid #444; background: #2d2d2d; color: white; box-sizing: border-box;">
             <button id="send-meeting-question-btn" class="primary-btn"

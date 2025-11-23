@@ -113,6 +113,7 @@ class App {
     this.meetingInProgressPanel = document.getElementById("meeting-in-progress-panel");
     this.activeMeetingTopic = document.getElementById("active-meeting-topic");
     this.meetingTranscript = document.getElementById("meeting-transcript");
+    this.meetingTargetSelect = document.getElementById("meeting-target-select");
     this.pauseMeetingBtn = document.getElementById("pause-meeting-btn");
     this.endMeetingBtn = document.getElementById("end-meeting-btn");
 
@@ -443,6 +444,15 @@ class App {
     this.meetingTranscript.innerHTML = "";
     document.getElementById("active-meeting-topic").textContent = topic;
 
+    // Populate Target Selector
+    this.meetingTargetSelect.innerHTML = '<option value="all">All Agents</option>';
+    Object.values(this.meetingAgents).forEach(agent => {
+      const option = document.createElement("option");
+      option.value = agent.name;
+      option.textContent = agent.name;
+      this.meetingTargetSelect.appendChild(option);
+    });
+
     this.appendMeetingMessage("system", `Meeting started: ${topic}`);
     this.appendMeetingMessage("system", "The board is ready. Please ask your question.");
   }
@@ -467,8 +477,20 @@ class App {
   }
 
   async streamMeeting(userMessage) {
+    // Filter agents based on selection
+    const targetAgent = this.meetingTargetSelect ? this.meetingTargetSelect.value : "all";
+    let activeConfigs = this.currentMeetingContext.agent_configs;
+    let activeAgents = this.currentMeetingContext.agents;
+
+    if (targetAgent !== "all") {
+      activeConfigs = activeConfigs.filter(c => c.name === targetAgent);
+      activeAgents = activeAgents.filter(name => name === targetAgent);
+    }
+
     const payload = {
       ...this.currentMeetingContext,
+      agents: activeAgents,
+      agent_configs: activeConfigs,
       user_message: userMessage,
       meeting_id: this.currentMeetingId
     };

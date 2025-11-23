@@ -75,16 +75,20 @@ async def run_meeting(
             for name in request.agents
         ]
         
-        for agent_config in agent_configs:
+        # Parallel Execution Setup
+        queue = asyncio.Queue()
+        
+        async def process_agent(agent_config):
             agent_name = agent_config.name if hasattr(agent_config, 'name') else agent_config['name']
             model_provider = agent_config.model_provider if hasattr(agent_config, 'model_provider') else agent_config['model_provider']
             model_name = agent_config.model_name if hasattr(agent_config, 'model_name') else agent_config['model_name']
             
-            yield json.dumps({
+            # Notify thinking
+            await queue.put(json.dumps({
                 "agent_name": "system", 
                 "response_text": f"{agent_name} is thinking...",
                 "related_agent": agent_name
-            }) + "\n"
+            }) + "\n")
             
             # Fetch custom agent from database
             agent_data = await agent_repo.get_agent_by_name(agent_name)
@@ -92,7 +96,6 @@ async def run_meeting(
             if agent_data:
                 persona = agent_data['system_instructions']
             else:
-                # Fallback if agent not found
                 persona = f"You are {agent_name}, a helpful AI board member. Provide constructive input."
             
             try:
@@ -101,27 +104,39 @@ async def run_meeting(
                     company_context=request.company_context,
                     agent_name=agent_name,
                     persona_prompt=persona,
-                    history=history_dicts,
+                    history=history_dicts, # Note: Parallel agents won't see each other's current turn
                     attachment_path=request.attachment_path,
                     user_message=request.user_message,
                     model_provider=model_provider,
-                    model_name=model_name  # Pass specific model name
+                    model_name=model_name
                 )
                 
                 # Save agent response
                 await meeting_repo.add_message(meeting_id, "model", agent_name, response_text)
                 
-                # Add this response to history so subsequent agents in this turn can see it
-                history_dicts.append({
-                    "role": "model",
-                    "parts": [f"{agent_name}: {response_text}"]
-                })
-                
-                yield json.dumps({"agent_name": agent_name, "response_text": response_text}) + "\n"
+                # Send response
+                await queue.put(json.dumps({"agent_name": agent_name, "response_text": response_text}) + "\n")
                 
             except Exception as e:
                 error_msg = f"Error from {agent_name}: {str(e)}"
-                yield json.dumps({"agent_name": "system", "response_text": error_msg}) + "\n"
+                await queue.put(json.dumps({"agent_name": "system", "response_text": error_msg}) + "\n")
+
+        # Launch all agent tasks in parallel
+        tasks = [asyncio.create_task(process_agent(ac)) for ac in agent_configs]
+        
+        # Background waiter to signal completion
+        async def waiter():
+            await asyncio.gather(*tasks)
+            await queue.put(None) # Sentinel to stop the loop
+            
+        asyncio.create_task(waiter())
+        
+        # Stream results as they arrive
+        while True:
+            item = await queue.get()
+            if item is None:
+                break
+            yield item
 
     return StreamingResponse(stream_generator(), media_type="application/x-ndjson")
 
