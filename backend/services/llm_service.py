@@ -104,15 +104,43 @@ class LLMService:
     async def _get_ollama_chat(self, model_name: str, history: List, user_message: str, node_context: str, attachment_path: str = None) -> str:
         base_url = await self.settings_service.get_setting('runpod_url')
         if not base_url: raise ValueError("RunPod URL is not configured.")
-        url = f"{base_url.rstrip('/')}/api/generate"
-        final_prompt = f"System Context:\n{node_context}\n\n"
-        for h in history: final_prompt += f"{h['role']}: {h['parts'][0]}\n"
-        final_prompt += f"user: {user_message}\nassistant:"
-        payload = {"model": model_name, "prompt": final_prompt, "stream": False}
+        
+        # Switch to /api/chat for better role adherence
+        url = f"{base_url.rstrip('/')}/api/chat"
+        
+        # Construct structured messages
+        messages = [
+            {"role": "system", "content": node_context}
+        ]
+        
+        # Add history
+        for h in history:
+            role = h['role']
+            # Map 'model' role to 'assistant' for Ollama
+            if role == 'model': role = 'assistant'
+            messages.append({"role": role, "content": h['parts'][0]})
+            
+        # Add current user message
+        messages.append({"role": "user", "content": user_message})
+        
+        payload = {
+            "model": model_name, 
+            "messages": messages, 
+            "stream": False
+        }
+        
         if attachment_path:
             base64_image = self._prepare_image_for_ollama(attachment_path)
-            if base64_image: payload['images'] = [base64_image]
+            if base64_image: 
+                # For vision models, images are attached to the user message
+                messages[-1]['images'] = [base64_image]
+
         response_data = await self._get_ollama_response_safely(url, payload)
+        
+        # Parse chat response format
+        if 'message' in response_data:
+            return response_data['message']['content']
+            
         return response_data.get('response', "Error: Empty response from Ollama.")
 
     async def _get_gemini_brainstorm(self, prompt: str, context: str = None, attachment_path: str = None) -> Tuple[Dict, str]:

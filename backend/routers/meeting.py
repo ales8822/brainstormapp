@@ -111,6 +111,12 @@ async def run_meeting(
                 # Save agent response
                 await meeting_repo.add_message(meeting_id, "model", agent_name, response_text)
                 
+                # Add this response to history so subsequent agents in this turn can see it
+                history_dicts.append({
+                    "role": "model",
+                    "parts": [f"{agent_name}: {response_text}"]
+                })
+                
                 yield json.dumps({"agent_name": agent_name, "response_text": response_text}) + "\n"
                 
             except Exception as e:

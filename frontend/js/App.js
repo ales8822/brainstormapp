@@ -476,6 +476,9 @@ class App {
     // Track thinking bubbles
     const thinkingBubbles = {};
 
+    // Add user message to history immediately
+    this.currentMeetingContext.history.push({ role: "user", parts: [userMessage] });
+
     try {
       const response = await fetch(`${this.api.baseUrl}/meetings/run`, {
         method: "POST",
@@ -536,9 +539,6 @@ class App {
           }
         }
       }
-
-      // Add user message to history
-      this.currentMeetingContext.history.push({ role: "user", parts: [userMessage] });
 
     } catch (error) {
       console.error("Meeting stream error:", error);
