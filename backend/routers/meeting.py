@@ -69,7 +69,17 @@ async def run_meeting(
         from ..repositories.agent_repository import AgentRepository
         agent_repo = AgentRepository(meeting_repo.db)
         
-        for agent_name in request.agents:
+        # Use agent_configs if provided, otherwise fall back to agents list
+        agent_configs = request.agent_configs if request.agent_configs else [
+            {"name": name, "model_provider": "gemini", "model_name": "Gemini 2.0 Flash"} 
+            for name in request.agents
+        ]
+        
+        for agent_config in agent_configs:
+            agent_name = agent_config.name if hasattr(agent_config, 'name') else agent_config['name']
+            model_provider = agent_config.model_provider if hasattr(agent_config, 'model_provider') else agent_config['model_provider']
+            model_name = agent_config.model_name if hasattr(agent_config, 'model_name') else agent_config['model_name']
+            
             yield json.dumps({
                 "agent_name": "system", 
                 "response_text": f"{agent_name} is thinking...",
@@ -81,11 +91,9 @@ async def run_meeting(
             
             if agent_data:
                 persona = agent_data['system_instructions']
-                model_provider = agent_data['model_provider']
             else:
                 # Fallback if agent not found
                 persona = f"You are {agent_name}, a helpful AI board member. Provide constructive input."
-                model_provider = "gemini"
             
             try:
                 response_text = await llm_service.run_meeting_turn(
@@ -96,7 +104,8 @@ async def run_meeting(
                     history=history_dicts,
                     attachment_path=request.attachment_path,
                     user_message=request.user_message,
-                    model_provider=model_provider  # Pass the agent's preferred model
+                    model_provider=model_provider,
+                    model_name=model_name  # Pass specific model name
                 )
                 
                 # Save agent response

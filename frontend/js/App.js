@@ -426,7 +426,12 @@ class App {
     this.currentMeetingContext = {
       topic,
       company_context: context,
-      agents,
+      agents,  // Keep for backward compatibility
+      agent_configs: Object.values(this.meetingAgents).map(agentObj => ({
+        name: agentObj.name,
+        model_provider: agentObj.model.provider,
+        model_name: agentObj.model.name
+      })),
       attachment_path: attachmentPath,
       history: []
     };
@@ -875,12 +880,15 @@ class App {
         const agentName = agentObj.name;
         const agentData = agentObj.data;
         const avatarColor = agentData?.avatar_color || "#3498db";
+        const modelInfo = agentObj.model;
+        const modelBadge = modelInfo ? `<div class="agent-model-badge" style="font-size: 0.7em; color: ${modelInfo.provider === 'gemini' ? '#4285f4' : '#16a085'}; margin-top: 2px;">${modelInfo.provider === 'gemini' ? '☁️' : '🖥️'} ${modelInfo.name.split(':')[0].substring(0, 10)}</div>` : '';
 
         chair.classList.add("occupied");
         chair.dataset.agent = agentName;
         chair.innerHTML = `
           <div class="agent-avatar" style="background-color: ${avatarColor};">${agentName.charAt(0)}</div>
           <div class="agent-name">${agentName}</div>
+          ${modelBadge}
           <button class="remove-agent-btn" title="Remove">×</button>
         `;
         chair.querySelector(".remove-agent-btn").onclick = (e) => {
@@ -926,8 +934,11 @@ class App {
       this.meetingAgentMenuList.innerHTML = "";
 
       // Filter out already seated agents
+      const seatedAgentNames = Object.values(this.meetingAgents)
+        .filter(a => a && a.name)
+        .map(a => a.name);
       const availableAgents = agents.filter(agent =>
-        !Object.values(this.meetingAgents).includes(agent.name)
+        !seatedAgentNames.includes(agent.name)
       );
 
       if (availableAgents.length === 0) {
@@ -982,7 +993,8 @@ class App {
           });
 
           item.addEventListener("click", () => {
-            this.handleSelectMeetingAgent(chairIndex, agent.name, agent);
+            // Instead of directly selecting, show model picker
+            this.showModelPickerForAgent(chairIndex, agent);
             this.meetingAgentMenu.style.display = "none";
           });
           this.meetingAgentMenuList.appendChild(item);
@@ -998,11 +1010,148 @@ class App {
     this.meetingAgentMenu.style.display = "block";
   }
 
-  handleSelectMeetingAgent(chairIndex, agentName, agentData) {
+  async showModelPickerForAgent(chairIndex, agent) {
+    // Create or get model picker modal
+    let modelPicker = document.getElementById("model-picker-modal");
+    if (!modelPicker) {
+      modelPicker = document.createElement("div");
+      modelPicker.id = "model-picker-modal";
+      modelPicker.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.7);
+        display: none;
+        justify-content: center;
+        align-items: center;
+        z-index: 10000;
+      `;
+      modelPicker.innerHTML = `
+        <div class="modal-content" style="
+          background-color: #2d2d2d;
+          border-radius: 8px;
+          padding: 24px;
+          width: 400px;
+          max-width: 90%;
+          box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+        ">
+          <h3 style="margin-top: 0; color: #ecf0f1;">Select Model for <span id="model-picker-agent-name"></span></h3>
+          <div id="model-picker-list" style="margin: 20px 0;"></div>
+          <div class="modal-actions" style="text-align: right;">
+            <button id="model-picker-cancel" class="secondary-btn">Cancel</button>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(modelPicker);
+
+      // Close on cancel
+      modelPicker.querySelector("#model-picker-cancel").addEventListener("click", () => {
+        modelPicker.style.display = "none";
+      });
+
+      // Close on click outside
+      modelPicker.addEventListener("click", (e) => {
+        if (e.target === modelPicker) modelPicker.style.display = "none";
+      });
+    }
+
+    // Update agent name
+    modelPicker.querySelector("#model-picker-agent-name").textContent = agent.name;
+
+    // Build model list
+    const modelList = modelPicker.querySelector("#model-picker-list");
+    modelList.innerHTML = "<div style='padding: 10px; color: #888;'>Loading models...</div>";
+
+    try {
+      // Get available models
+      const availableModels = this.settings.availableModels || [];
+      const geminiModels = ["Gemini 2.0 Flash"];
+      const ollamaModels = availableModels.filter(m => !m.toLowerCase().includes("gemini"));
+
+      modelList.innerHTML = "";
+
+      // Add Gemini section
+      if (geminiModels.length > 0) {
+        const geminiHeader = document.createElement("div");
+        geminiHeader.style.cssText = "font-weight: bold; color: #4285f4; margin-bottom: 8px; font-size: 0.9em;";
+        geminiHeader.textContent = "☁️ Cloud Models (Gemini)";
+        modelList.appendChild(geminiHeader);
+
+        geminiModels.forEach(modelName => {
+          const btn = this.createModelButton(modelName, "gemini", () => {
+            this.handleSelectMeetingAgent(chairIndex, agent.name, agent, "gemini", modelName);
+            modelPicker.style.display = "none";
+          });
+          modelList.appendChild(btn);
+        });
+      }
+
+      // Add Ollama section
+      if (ollamaModels.length > 0) {
+        const ollamaHeader = document.createElement("div");
+        ollamaHeader.style.cssText = "font-weight: bold; color: #16a085; margin: 15px 0 8px 0; font-size: 0.9em;";
+        ollamaHeader.textContent = "🖥️ Local Models (Ollama)";
+        modelList.appendChild(ollamaHeader);
+
+        ollamaModels.forEach(modelName => {
+          const btn = this.createModelButton(modelName, "ollama", () => {
+            this.handleSelectMeetingAgent(chairIndex, agent.name, agent, "ollama", modelName);
+            modelPicker.style.display = "none";
+          });
+          modelList.appendChild(btn);
+        });
+      }
+
+      if (geminiModels.length === 0 && ollamaModels.length === 0) {
+        modelList.innerHTML = "<div style='padding: 10px; color: #888;'>No models available</div>";
+      }
+
+    } catch (error) {
+      console.error("Failed to load models:", error);
+      modelList.innerHTML = "<div style='padding: 10px; color: #e74c3c;'>Failed to load models</div>";
+    }
+
+    modelPicker.style.display = "flex";
+  }
+
+  createModelButton(modelName, provider, onClick) {
+    const btn = document.createElement("button");
+    btn.style.cssText = `
+      width: 100%;
+      padding: 12px;
+      margin-bottom: 8px;
+      background-color: #2d2d2d;
+      border: 1px solid #444;
+      border-radius: 6px;
+      color: #ecf0f1;
+      cursor: pointer;
+      text-align: left;
+      transition: all 0.2s;
+    `;
+    btn.textContent = modelName;
+    btn.addEventListener("mouseenter", () => {
+      btn.style.backgroundColor = "#3d3d3d";
+      btn.style.borderColor = provider === "gemini" ? "#4285f4" : "#16a085";
+    });
+    btn.addEventListener("mouseleave", () => {
+      btn.style.backgroundColor = "#2d2d2d";
+      btn.style.borderColor = "#444";
+    });
+    btn.addEventListener("click", onClick);
+    return btn;
+  }
+
+  handleSelectMeetingAgent(chairIndex, agentName, agentData, provider, modelName) {
     // Store the full agent object for later use
     this.meetingAgents[chairIndex] = {
       name: agentName,
-      data: agentData
+      data: agentData,
+      model: {
+        provider: provider,
+        name: modelName
+      }
     };
     this.initializeBoardChairs(); // Re-render
     this.updateStartButtonState();

@@ -611,19 +611,63 @@ class LLMService:
         history: List[Dict] = [], 
         attachment_path: str = None, 
         user_message: str = None,
-        model_provider: str = "gemini"
+        model_provider: str = "gemini",
+        model_name: str = None  # NEW: specific model name
     ) -> str:
         """
         Executes a single turn in a meeting for a specific agent.
-        Uses the agent's custom system instructions and preferred model.
+        Uses the agent's custom system instructions and specified model.
         """
         system_prompt = f"Your Persona: {persona_prompt}\nMeeting Topic: {topic}\nCompany Context: {company_context}\nYour Goal: Provide a concise, insightful contribution based on your persona. Keep your response under 100 words."
         user_trigger = user_message if user_message else "It is your turn to speak. Please provide your input."
         
-        # Use the specified model_provider
+        # Use the specified model_provider and model_name
         if model_provider == 'gemini':
             return await self._get_gemini_chat(history, user_trigger, system_prompt, attachment_path)
         else:  # ollama
-            # For Ollama, get the configured model name
-            ollama_model = await self.settings_service.get_setting('ollama_model_name', 'llama3')
+            # Use the specific Ollama model name provided, or fall back to settings
+            ollama_model = model_name if model_name else await self.settings_service.get_setting('ollama_model_name', 'llama3')
             return await self._get_ollama_chat(ollama_model, history, user_trigger, system_prompt, attachment_path)
+
+    async def synthesize_meeting_minutes(self, topic: str, company_context: str, transcript: List[Dict]) -> str:
+        """
+        Generates professional meeting minutes from a transcript.
+        """
+        transcript_text = ""
+        for entry in transcript:
+            transcript_text += f"**{entry.get('agent', 'Unknown')}**: {entry.get('statement', '')}\n\n"
+        
+        system_prompt = f"""You are an AI Executive Secretary.
+Meeting Topic: {topic}
+Company Context: {company_context}
+
+Your task is to create a professional summary in Markdown format with:
+- Executive Summary
+- Key Discussion Points
+- Decisions Made
+- Action Items
+- Next Steps"""
+        
+        user_message = f"Please synthesize the following meeting transcript:\n\n{transcript_text}"
+        
+        try:
+            return await self._get_gemini_chat([], user_message, system_prompt)
+        except Exception as e:
+            return f"# Meeting Minutes\n\n**Error generating minutes**: {str(e)}\n\n## Raw Transcript\n\n{transcript_text}"
+
+    async def query_secretary(self, topic: str, company_context: str, minutes: str, query: str) -> str:
+        """
+        Answers questions about the meeting based on the minutes.
+        """
+        system_prompt = f"""You are an AI Executive Secretary.
+Meeting Topic: {topic}
+Company Context: {company_context}
+Meeting Minutes:
+{minutes}
+
+Your task is to answer questions about the meeting based on the minutes provided."""
+        
+        try:
+            return await self._get_gemini_chat([], query, system_prompt)
+        except Exception as e:
+            return f"I apologize, but I encountered an error: {str(e)}"

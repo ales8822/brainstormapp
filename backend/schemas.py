@@ -52,11 +52,18 @@ class DeleteEdgeRequest(BaseModel):
 class NodeContentUpdateRequest(BaseModel):
     full_text: str
 
+class AgentConfig(BaseModel):
+    """Configuration for an agent instance in a meeting"""
+    name: str
+    model_provider: str  # 'gemini' or 'ollama'
+    model_name: str  # e.g., 'Gemini 2.0 Flash', 'qwen3', 'llama3'
+
 class MeetingRequest(BaseModel):
     meeting_id: Optional[str] = None
     topic: str
     company_context: str
-    agents: List[str]
+    agents: List[str]  # Keep for backward compatibility
+    agent_configs: Optional[List[AgentConfig]] = []  # New: detailed configs
     attachment_path: Optional[str] = None
     user_message: Optional[str] = None
     history: List[ChatMessage] = []
