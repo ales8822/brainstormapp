@@ -481,8 +481,8 @@ class App {
       this.appendMeetingMessage("user", question);
       this.appendMeetingMessage("system", `Topic set: "${question}". Starting Opening Statements.`);
 
-      // Start the loop
-      this.advanceDebateTurn();
+      // Update Moderator Panel
+      this.renderModeratorPanel();
       return;
     }
 
@@ -498,7 +498,7 @@ class App {
     this.meetingUserQuestion.focus();
   }
 
-  async streamMeeting(userMessage, targetAgentOverride = null) {
+  async streamMeeting(userMessage, targetAgentOverride = null, hideUserMessage = false) {
     // Filter agents based on selection OR override
     const targetAgent = targetAgentOverride || (this.meetingTargetSelect ? this.meetingTargetSelect.value : "all");
     let activeConfigs = this.currentMeetingContext.agent_configs;
@@ -522,6 +522,11 @@ class App {
 
     // Add user message to history immediately
     this.currentMeetingContext.history.push({ role: "user", parts: [userMessage] });
+
+    // Display user message in chat (unless it's a hidden system instruction)
+    if (!hideUserMessage) {
+      this.appendMeetingMessage("user", userMessage);
+    }
 
     try {
       const response = await fetch(`${this.api.baseUrl}/meetings/run`, {
@@ -710,71 +715,181 @@ class App {
     modal.style.display = "flex";
   }
 
-  async advanceDebateTurn() {
-    if (!this.isDebating) return;
+  startModeratorMode() {
+    const panel = document.getElementById("moderator-panel");
+    panel.style.display = "flex";
+
+    const nextBtn = document.getElementById("mod-next-phase-btn");
+    nextBtn.onclick = () => this.nextDebatePhase();
+
+    this.renderModeratorPanel();
+  }
+
+  renderModeratorPanel() {
+    const container = document.getElementById("moderator-agent-controls");
+    container.innerHTML = "";
 
     const state = this.debateState;
-    const currentAgentName = state.participants[state.turnIndex];
+    const phase = state.stage;
 
-    // Determine Instruction based on Stage
-    let instruction = "";
-    let stageDisplay = "";
+    // Update Phase Display
+    const phaseDisplay = document.getElementById("moderator-phase-display");
+    phaseDisplay.textContent = `Phase: ${this.getPhaseLabel(phase)}`;
 
-    switch (state.stage) {
-      case 'OPENING':
-        stageDisplay = "Opening Statement";
-        instruction = `You are giving your **Opening Statement** for the debate on "${state.topic}". 
-              Introduce your stance clearly. Do not directly attack opponents yet. Maintain a consistent viewpoint.`;
+    // Update Next Button Text
+    const nextBtn = document.getElementById("mod-next-phase-btn");
+    nextBtn.textContent = this.getPhaseNextLabel(phase);
+
+    if (phase === 'WAITING_FOR_TOPIC') {
+      container.innerHTML = "<div style='color:#888; font-style:italic;'>Waiting for topic...</div>";
+      return;
+    }
+
+    this.activeDebateParticipants.forEach((agentName) => {
+      // Use IIFE to properly capture agentName for each iteration
+      ((currentAgentName) => {
+        const card = document.createElement("div");
+        card.style.cssText = "background: #333; padding: 10px; border-radius: 4px; border: 1px solid #444;";
+
+        const header = document.createElement("div");
+        header.style.cssText = "font-weight: bold; margin-bottom: 5px; color: #fff; display: flex; justify-content: space-between;";
+        header.textContent = currentAgentName;
+
+        // Controls
+        const controls = document.createElement("div");
+        controls.style.cssText = "display: flex; flex-direction: column; gap: 5px;";
+
+        // Action Buttons based on Phase
+        if (phase === 'OPENING') {
+          this.createActionBtn(controls, "Expose Statement", () => this.handleDebateAction(currentAgentName, "EXPOSE"));
+          this.createActionBtn(controls, "Elaborate", () => this.handleDebateAction(currentAgentName, "ELABORATE"), "secondary-btn");
+        } else if (phase === 'REBUTTAL') {
+          const targetSelect = this.createTargetSelector(currentAgentName);
+          controls.appendChild(targetSelect);
+          this.createActionBtn(controls, "Respond", () => {
+            this.handleDebateAction(currentAgentName, "RESPOND", targetSelect.value);
+          });
+          this.createActionBtn(controls, "Elaborate", () => this.handleDebateAction(currentAgentName, "ELABORATE"), "secondary-btn");
+        } else if (phase === 'CROSS_EXAM') {
+          const targetSelect = this.createTargetSelector(currentAgentName);
+          controls.appendChild(targetSelect);
+          this.createActionBtn(controls, "Ask Question", () => {
+            this.handleDebateAction(currentAgentName, "ASK", targetSelect.value);
+          });
+          this.createActionBtn(controls, "Answer Question", () => {
+            this.handleDebateAction(currentAgentName, "ANSWER");
+          });
+          this.createActionBtn(controls, "Elaborate", () => this.handleDebateAction(currentAgentName, "ELABORATE"), "secondary-btn");
+        } else if (phase === 'COUNTER_REBUTTAL') {
+          this.createActionBtn(controls, "Counter-Rebuttal", () => this.handleDebateAction(currentAgentName, "COUNTER"));
+          this.createActionBtn(controls, "Elaborate", () => this.handleDebateAction(currentAgentName, "ELABORATE"), "secondary-btn");
+        } else if (phase === 'CLOSING') {
+          this.createActionBtn(controls, "Closing Statement", () => this.handleDebateAction(currentAgentName, "CLOSING"));
+          this.createActionBtn(controls, "Elaborate", () => this.handleDebateAction(currentAgentName, "ELABORATE"), "secondary-btn");
+        }
+
+        card.appendChild(header);
+        card.appendChild(controls);
+        container.appendChild(card);
+      })(agentName);
+    });
+  }
+
+  createActionBtn(container, text, onClick, cls = "primary-btn") {
+    const btn = document.createElement("button");
+    btn.className = cls;
+    btn.textContent = text;
+    btn.style.cssText = "padding: 5px; font-size: 0.9em; width: 100%;";
+    btn.onclick = onClick;
+    container.appendChild(btn);
+  }
+
+  createTargetSelector(currentAgent) {
+    const select = document.createElement("select");
+    select.style.cssText = "padding: 5px; background: #222; color: #ddd; border: 1px solid #444; border-radius: 4px; margin-bottom: 5px;";
+
+    this.activeDebateParticipants.forEach(p => {
+      if (p !== currentAgent) {
+        const opt = document.createElement("option");
+        opt.value = p;
+        opt.textContent = `To: ${p}`;
+        select.appendChild(opt);
+      }
+    });
+    return select;
+  }
+
+  async handleDebateAction(agentName, action, targetName) {
+    let prompt = "";
+    const topic = this.debateState.topic;
+
+    switch (action) {
+      case "EXPOSE":
+        prompt = `[SYSTEM]: Give your **Opening Statement** on "${topic}". Introduce your stance. No direct attacks yet.`;
         break;
-      case 'REBUTTAL':
-        stageDisplay = "Rebuttal";
-        instruction = `You are giving your **Rebuttal**. Critique the previous statements. 
-              Reference opponents by name. Identify contradictions or fallacies.`;
+      case "ELABORATE":
+        prompt = `[SYSTEM]: **Elaborate** on your last point. Provide more detail and reasoning.`;
         break;
-      case 'CROSS_EXAM':
-        stageDisplay = "Cross-Examination";
-        instruction = `You are in **Cross-Examination**. Ask 1-3 short, direct questions to your opponent to challenge their position. Keep it concise.`;
+      case "RESPOND":
+        prompt = `[SYSTEM]: **Respond** to ${targetName}'s statement. Critique their points regarding "${topic}".`;
         break;
-      case 'COUNTER_REBUTTAL':
-        stageDisplay = "Counter-Rebuttal";
-        instruction = `You are giving your **Counter-Rebuttal**. Address the challenges raised during cross-examination. Refine your reasoning.`;
+      case "ASK":
+        prompt = `[SYSTEM]: Ask a short, direct **Cross-Examination Question** to ${targetName}.`;
         break;
-      case 'CLOSING':
-        stageDisplay = "Closing Statement";
-        instruction = `Give your **Closing Statement**. Summarize why your position prevails. Do not introduce new arguments.`;
+      case "ANSWER":
+        prompt = `[SYSTEM]: **Answer** the question concisely.`;
+        break;
+      case "COUNTER":
+        prompt = `[SYSTEM]: Give your **Counter-Rebuttal**. Address the challenges raised. Refine your reasoning.`;
+        break;
+      case "CLOSING":
+        prompt = `[SYSTEM]: Give your **Closing Statement**. Summarize why your position prevails. No new arguments.`;
         break;
     }
 
-    // System announcement
-    if (state.turnIndex === 0) {
-      this.appendMeetingMessage("system", `--- ${stageDisplay} Phase ---`);
+    // Hide the system instruction from chat, but send it to the agent
+    await this.streamMeeting(prompt, agentName, true);
+  }
+
+  nextDebatePhase() {
+    const stages = ['WAITING_FOR_TOPIC', 'OPENING', 'REBUTTAL', 'CROSS_EXAM', 'COUNTER_REBUTTAL', 'CLOSING', 'FINISHED'];
+    const currentIndex = stages.indexOf(this.debateState.stage);
+
+    if (this.debateState.stage === 'CLOSING') {
+      this.handleEndDebate();
+      return;
     }
 
-    // Send prompt
-    await this.streamMeeting(`[SYSTEM]: ${instruction}`, currentAgentName);
-
-    // Advance Turn
-    state.turnIndex++;
-    if (state.turnIndex >= state.participants.length) {
-      state.turnIndex = 0;
-      this.nextDebateStage();
-    }
-
-    // Schedule next turn
-    if (this.isDebating && state.stage !== 'FINISHED') {
-      setTimeout(() => this.advanceDebateTurn(), 5000);
-    } else if (state.stage === 'FINISHED') {
-      this.isDebating = false;
-      this.appendMeetingMessage("system", "Debate finished. Click 'End Debate' to generate summary.");
+    if (currentIndex < stages.length - 1) {
+      this.debateState.stage = stages[currentIndex + 1];
+      this.renderModeratorPanel();
+      this.appendMeetingMessage("system", `--- Phase Changed to: ${this.getPhaseLabel(this.debateState.stage)} ---`);
     }
   }
 
-  nextDebateStage() {
-    const stages = ['OPENING', 'REBUTTAL', 'CROSS_EXAM', 'COUNTER_REBUTTAL', 'CLOSING', 'FINISHED'];
-    const currentIndex = stages.indexOf(this.debateState.stage);
-    if (currentIndex < stages.length - 1) {
-      this.debateState.stage = stages[currentIndex + 1];
-    }
+  getPhaseLabel(stage) {
+    const map = {
+      'WAITING_FOR_TOPIC': 'Waiting for Topic',
+      'OPENING': 'Opening Statements',
+      'REBUTTAL': 'Rebuttal Phase',
+      'CROSS_EXAM': 'Cross-Examination',
+      'COUNTER_REBUTTAL': 'Counter-Rebuttals',
+      'CLOSING': 'Closing Statements',
+      'FINISHED': 'Finished'
+    };
+    return map[stage] || stage;
+  }
+
+  getPhaseNextLabel(stage) {
+    const map = {
+      'WAITING_FOR_TOPIC': 'Start Opening Phase',
+      'OPENING': 'Start Rebuttal Phase',
+      'REBUTTAL': 'Start Cross-Exam Phase',
+      'CROSS_EXAM': 'Start Counter-Rebuttal',
+      'COUNTER_REBUTTAL': 'Start Closing Phase',
+      'CLOSING': 'End Debate & Summarize'
+    };
+    return map[stage] || 'Next Phase';
   }
 
   confirmStartDebate() {
@@ -825,13 +940,20 @@ class App {
     this.meetingAgents = newAgents;
     this.updateMeetingContextAgents();
     this.renderMeetingParticipants();
+
+    // Start Moderator Mode
+    this.startModeratorMode();
   }
 
   async handleEndDebate() {
-    if (!confirm("End debate and generate summary?")) return;
+    if (!confirm("End debate and generate minutes?")) return;
 
-    this.isDebating = false; // Stop the loop
-    this.appendMeetingMessage("system", "Debate ended. Generating summary...");
+    this.isDebating = false;
+
+    // Hide Moderator Panel
+    document.getElementById("moderator-panel").style.display = "none";
+
+    this.appendMeetingMessage("system", "Debate ended. Generating minutes...");
 
     // Restore agents
     this.meetingAgents = this.originalMeetingAgents;
@@ -848,33 +970,26 @@ class App {
     endBtn.parentNode.replaceChild(newBtn, endBtn);
     newBtn.addEventListener("click", () => this.handleStartDebateClick());
 
-    // Generate Summary
+    // Generate Meeting Minutes (as requested by user)
     try {
-      // Extract transcript since debate start
-      // Map history format to what backend expects (agent_name, response_text)
-      const debateTranscript = this.currentMeetingContext.history.slice(this.debateStartIndex).map(msg => ({
-        agent_name: msg.role === 'model' ? (msg.parts[0].split(':')[0] || 'Agent') : 'User',
-        response_text: msg.parts[0]
-      }));
-
-      const response = await fetch(`${this.api.baseUrl}/meetings/debate/summary`, {
+      const response = await fetch(`${this.api.baseUrl}/meetings/minutes`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          topic: document.getElementById("active-meeting-topic").textContent,
-          transcript: debateTranscript,
-          participants: this.activeDebateParticipants
+          topic: document.getElementById("active-meeting-topic").textContent + " (Debate)",
+          company_context: this.currentMeetingContext.company_context,
+          messages: this.currentMeetingContext.history
         })
       });
 
-      if (!response.ok) throw new Error("Failed to generate summary");
+      if (!response.ok) throw new Error("Failed to generate minutes");
       const data = await response.json();
 
-      this.renderDebateSummary(data.summary);
+      this.displayMeetingMinutes(data.minutes);
 
     } catch (error) {
       console.error(error);
-      this.appendMeetingMessage("system", "Error generating debate summary.");
+      this.appendMeetingMessage("system", "Error generating minutes.");
     }
   }
 
