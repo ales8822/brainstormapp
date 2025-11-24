@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
-from ..schemas import MeetingRequest, SecretaryQueryRequest, MeetingMinutesRequest, MeetingSummaryResponse, MeetingDetailResponse
+from ..schemas import MeetingRequest, SecretaryQueryRequest, MeetingMinutesRequest, MeetingSummaryResponse, MeetingDetailResponse, DebateSummaryRequest
 from ..services.llm_service import LLMService
 from ..dependencies import get_llm_service
 from ..data_access.connection import get_db_connection
@@ -192,3 +192,17 @@ async def get_meeting_detail(meeting_id: str, meeting_repo: MeetingRepository = 
     if not meeting:
         raise HTTPException(status_code=404, detail="Meeting not found")
     return meeting
+@router.post("/debate/summary")
+async def generate_debate_summary(
+    request: DebateSummaryRequest,
+    llm_service: LLMService = Depends(get_llm_service)
+):
+    try:
+        summary = await llm_service.synthesize_debate_summary(
+            request.topic, 
+            request.transcript, 
+            request.participants
+        )
+        return {"summary": summary}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

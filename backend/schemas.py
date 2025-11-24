@@ -103,3 +103,8 @@ class MeetingDetailResponse(BaseModel):
     end_time: Optional[datetime]
     minutes_text: Optional[str]
     messages: List[MeetingMessageResponse]
+
+class DebateSummaryRequest(BaseModel):
+    topic: str
+    transcript: List[Dict]
+    participants: List[str]

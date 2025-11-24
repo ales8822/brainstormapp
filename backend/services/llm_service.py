@@ -678,11 +678,6 @@ Your task is to create a professional summary in Markdown format with:
         
         user_message = f"Please synthesize the following meeting transcript:\n\n{transcript_text}"
         
-        try:
-            return await self._get_gemini_chat([], user_message, system_prompt)
-        except Exception as e:
-            return f"# Meeting Minutes\n\n**Error generating minutes**: {str(e)}\n\n## Raw Transcript\n\n{transcript_text}"
-
     async def query_secretary(self, topic: str, company_context: str, minutes: str, query: str) -> str:
         """
         Answers questions about the meeting based on the minutes.
@@ -699,3 +694,38 @@ Your task is to answer questions about the meeting based on the minutes provided
             return await self._get_gemini_chat([], query, system_prompt)
         except Exception as e:
             return f"I apologize, but I encountered an error: {str(e)}"
+
+    async def synthesize_debate_summary(self, topic: str, transcript: List[Dict], participants: List[str]) -> str:
+        """
+        Generates a side-by-side comparison of arguments from a debate.
+        """
+        system_prompt = "You are an expert Debate Moderator. Your task is to analyze the debate transcript and produce a structured summary."
+        
+        # Format transcript
+        transcript_text = ""
+        for msg in transcript:
+            role = msg.get('agent_name', 'User')
+            text = msg.get('response_text', '')
+            transcript_text += f"{role}: {text}\n"
+            
+        prompt = f"""
+        Debate Topic: {topic}
+        Participants: {', '.join(participants)}
+        
+        Transcript:
+        {transcript_text}
+        
+        Please generate a summary of this debate in the following format:
+        
+        1. **Executive Summary**: A brief overview of the core conflict and conclusion (if any).
+        2. **Argument Comparison**: A Markdown table comparing the key points of each participant side-by-side.
+           The table columns should be: | Issue/Point | {participants[0]} | {participants[1] if len(participants) > 1 else 'Other'} | ...
+        3. **Key Takeaways**: Bullet points of the most important insights.
+        
+        Ensure the table is well-formatted and captures the essence of the opposing views.
+        """
+        
+        try:
+            return await self._get_gemini_chat([], prompt, system_prompt)
+        except Exception as e:
+            return f"Error generating debate summary: {str(e)}"

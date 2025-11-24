@@ -117,6 +117,18 @@ class App {
     this.pauseMeetingBtn = document.getElementById("pause-meeting-btn");
     this.endMeetingBtn = document.getElementById("end-meeting-btn");
 
+    document.getElementById("meeting-add-participant-btn")?.addEventListener("click", (e) => {
+      const rect = e.target.getBoundingClientRect();
+      this.showAgentMenuForActiveMeeting(rect.left, rect.bottom);
+    });
+
+    // --- DEBATE REFS ---
+    document.getElementById("start-debate-btn")?.addEventListener("click", () => this.handleStartDebateClick());
+    document.getElementById("confirm-start-debate-btn")?.addEventListener("click", () => this.confirmStartDebate());
+    document.getElementById("cancel-debate-btn")?.addEventListener("click", () => {
+      document.getElementById("debate-setup-modal").style.display = "none";
+    });
+
     // --- MEETING MINUTES REFS ---
     this.meetingMinutesPanel = document.getElementById("meeting-minutes-panel");
     this.meetingMinutesContent = document.getElementById("meeting-minutes-content");
@@ -444,14 +456,14 @@ class App {
     this.meetingTranscript.innerHTML = "";
     document.getElementById("active-meeting-topic").textContent = topic;
 
-    // Populate Target Selector
-    this.meetingTargetSelect.innerHTML = '<option value="all">All Agents</option>';
-    Object.values(this.meetingAgents).forEach(agent => {
-      const option = document.createElement("option");
-      option.value = agent.name;
-      option.textContent = agent.name;
-      this.meetingTargetSelect.appendChild(option);
-    });
+    // Re-attach debate listener to ensure it works
+    const debateBtn = document.getElementById("start-debate-btn");
+    if (debateBtn) {
+      debateBtn.onclick = () => this.handleStartDebateClick();
+    }
+
+    // Initialize participants bar and selector
+    this.renderMeetingParticipants();
 
     this.appendMeetingMessage("system", `Meeting started: ${topic}`);
     this.appendMeetingMessage("system", "The board is ready. Please ask your question.");
@@ -460,11 +472,21 @@ class App {
   async handleSendMeetingQuestion() {
     const question = this.meetingUserQuestion.value.trim();
     if (!question) return;
-
-    this.appendMeetingMessage("user", question);
     this.meetingUserQuestion.value = "";
 
-    // Disable input while waiting
+    // Check for Debate Topic
+    if (this.isDebating && this.debateState && this.debateState.stage === 'WAITING_FOR_TOPIC') {
+      this.debateState.topic = question;
+      this.debateState.stage = 'OPENING';
+      this.appendMeetingMessage("user", question);
+      this.appendMeetingMessage("system", `Topic set: "${question}". Starting Opening Statements.`);
+
+      // Start the loop
+      this.advanceDebateTurn();
+      return;
+    }
+
+    // Disable input while processing
     this.meetingUserQuestion.disabled = true;
     this.sendMeetingQuestionBtn.disabled = true;
 
@@ -476,9 +498,9 @@ class App {
     this.meetingUserQuestion.focus();
   }
 
-  async streamMeeting(userMessage) {
-    // Filter agents based on selection
-    const targetAgent = this.meetingTargetSelect ? this.meetingTargetSelect.value : "all";
+  async streamMeeting(userMessage, targetAgentOverride = null) {
+    // Filter agents based on selection OR override
+    const targetAgent = targetAgentOverride || (this.meetingTargetSelect ? this.meetingTargetSelect.value : "all");
     let activeConfigs = this.currentMeetingContext.agent_configs;
     let activeAgents = this.currentMeetingContext.agents;
 
@@ -566,6 +588,414 @@ class App {
       console.error("Meeting stream error:", error);
       this.appendMeetingMessage("system", "Error communicating with the board.");
     }
+  }
+
+  renderMeetingParticipants() {
+    const container = document.getElementById("meeting-active-participants-list");
+    if (!container) return;
+    container.innerHTML = "";
+
+    Object.values(this.meetingAgents).forEach(agent => {
+      const chip = document.createElement("div");
+      chip.style.cssText = `
+        display: flex; 
+        align-items: center; 
+        gap: 5px; 
+        background: #333; 
+        padding: 4px 8px; 
+        border-radius: 16px; 
+        border: 1px solid ${agent.data.avatar_color};
+        white-space: nowrap;
+      `;
+
+      const avatar = document.createElement("div");
+      avatar.style.cssText = `
+        width: 20px; height: 20px; 
+        border-radius: 50%; 
+        background: ${agent.data.avatar_color}; 
+        color: white; 
+        font-size: 10px; 
+        display: flex; 
+        align-items: center; 
+        justify-content: center;
+      `;
+      avatar.textContent = agent.name.charAt(0).toUpperCase();
+
+      const name = document.createElement("span");
+      name.textContent = agent.name;
+      name.style.fontSize = "0.9em";
+      name.style.color = "#ddd";
+
+      const removeBtn = document.createElement("span");
+      removeBtn.innerHTML = "&times;";
+      removeBtn.style.cssText = "cursor: pointer; color: #888; margin-left: 4px; font-weight: bold;";
+      removeBtn.onmouseover = () => removeBtn.style.color = "#e74c3c";
+      removeBtn.onmouseout = () => removeBtn.style.color = "#888";
+      removeBtn.onclick = () => this.removeParticipantFromMeeting(agent.name);
+
+      chip.appendChild(avatar);
+      chip.appendChild(name);
+      chip.appendChild(removeBtn);
+      container.appendChild(chip);
+    });
+
+    this.updateMeetingTargetSelector();
+  }
+
+  updateMeetingTargetSelector() {
+    if (!this.meetingTargetSelect) return;
+    const currentVal = this.meetingTargetSelect.value;
+    this.meetingTargetSelect.innerHTML = '<option value="all">All Agents</option>';
+    Object.values(this.meetingAgents).forEach(agent => {
+      const option = document.createElement("option");
+      option.value = agent.name;
+      option.textContent = agent.name;
+      this.meetingTargetSelect.appendChild(option);
+    });
+    // Restore selection if still valid
+    if (currentVal && (currentVal === 'all' || Object.values(this.meetingAgents).find(a => a.name === currentVal))) {
+      this.meetingTargetSelect.value = currentVal;
+    }
+  }
+
+  removeParticipantFromMeeting(agentName) {
+    // Find key
+    const key = Object.keys(this.meetingAgents).find(k => this.meetingAgents[k].name === agentName);
+    if (key) {
+      delete this.meetingAgents[key];
+      // Update context
+      this.updateMeetingContextAgents();
+      this.renderMeetingParticipants();
+    }
+  }
+
+  updateMeetingContextAgents() {
+    // Rebuild agents lists in context
+    this.currentMeetingContext.agents = Object.values(this.meetingAgents).map(a => a.name);
+    this.currentMeetingContext.agent_configs = Object.values(this.meetingAgents).map(a => ({
+      name: a.name,
+      model_provider: a.model.provider,
+      model_name: a.model.name
+    }));
+  }
+
+  handleStartDebateClick() {
+    console.log("Start Debate Clicked");
+    const modal = document.getElementById("debate-setup-modal");
+    const list = document.getElementById("debate-participant-list");
+    list.innerHTML = "";
+
+    // Populate with current meeting participants
+    Object.values(this.meetingAgents).forEach(agent => {
+      const div = document.createElement("div");
+      div.style.cssText = "display: flex; align-items: center; gap: 10px; padding: 5px; background: #333; border-radius: 4px;";
+
+      const checkbox = document.createElement("input");
+      checkbox.type = "checkbox";
+      checkbox.value = agent.name;
+      checkbox.id = `debate-check-${agent.name}`;
+
+      const label = document.createElement("label");
+      label.htmlFor = `debate-check-${agent.name}`;
+      label.textContent = agent.name;
+      label.style.color = "white";
+      label.style.cursor = "pointer";
+      label.style.flex = "1";
+
+      div.appendChild(checkbox);
+      div.appendChild(label);
+      list.appendChild(div);
+    });
+
+    modal.style.display = "flex";
+  }
+
+  async advanceDebateTurn() {
+    if (!this.isDebating) return;
+
+    const state = this.debateState;
+    const currentAgentName = state.participants[state.turnIndex];
+
+    // Determine Instruction based on Stage
+    let instruction = "";
+    let stageDisplay = "";
+
+    switch (state.stage) {
+      case 'OPENING':
+        stageDisplay = "Opening Statement";
+        instruction = `You are giving your **Opening Statement** for the debate on "${state.topic}". 
+              Introduce your stance clearly. Do not directly attack opponents yet. Maintain a consistent viewpoint.`;
+        break;
+      case 'REBUTTAL':
+        stageDisplay = "Rebuttal";
+        instruction = `You are giving your **Rebuttal**. Critique the previous statements. 
+              Reference opponents by name. Identify contradictions or fallacies.`;
+        break;
+      case 'CROSS_EXAM':
+        stageDisplay = "Cross-Examination";
+        instruction = `You are in **Cross-Examination**. Ask 1-3 short, direct questions to your opponent to challenge their position. Keep it concise.`;
+        break;
+      case 'COUNTER_REBUTTAL':
+        stageDisplay = "Counter-Rebuttal";
+        instruction = `You are giving your **Counter-Rebuttal**. Address the challenges raised during cross-examination. Refine your reasoning.`;
+        break;
+      case 'CLOSING':
+        stageDisplay = "Closing Statement";
+        instruction = `Give your **Closing Statement**. Summarize why your position prevails. Do not introduce new arguments.`;
+        break;
+    }
+
+    // System announcement
+    if (state.turnIndex === 0) {
+      this.appendMeetingMessage("system", `--- ${stageDisplay} Phase ---`);
+    }
+
+    // Send prompt
+    await this.streamMeeting(`[SYSTEM]: ${instruction}`, currentAgentName);
+
+    // Advance Turn
+    state.turnIndex++;
+    if (state.turnIndex >= state.participants.length) {
+      state.turnIndex = 0;
+      this.nextDebateStage();
+    }
+
+    // Schedule next turn
+    if (this.isDebating && state.stage !== 'FINISHED') {
+      setTimeout(() => this.advanceDebateTurn(), 5000);
+    } else if (state.stage === 'FINISHED') {
+      this.isDebating = false;
+      this.appendMeetingMessage("system", "Debate finished. Click 'End Debate' to generate summary.");
+    }
+  }
+
+  nextDebateStage() {
+    const stages = ['OPENING', 'REBUTTAL', 'CROSS_EXAM', 'COUNTER_REBUTTAL', 'CLOSING', 'FINISHED'];
+    const currentIndex = stages.indexOf(this.debateState.stage);
+    if (currentIndex < stages.length - 1) {
+      this.debateState.stage = stages[currentIndex + 1];
+    }
+  }
+
+  confirmStartDebate() {
+    const checkboxes = document.querySelectorAll("#debate-participant-list input[type='checkbox']:checked");
+    if (checkboxes.length < 2) {
+      alert("Please select at least 2 participants for the debate.");
+      return;
+    }
+
+    const participants = Array.from(checkboxes).map(cb => cb.value);
+    this.activeDebateParticipants = participants;
+    this.debateStartIndex = this.currentMeetingContext.history.length;
+
+    document.getElementById("debate-setup-modal").style.display = "none";
+
+    // Initialize State
+    this.debateState = {
+      stage: 'WAITING_FOR_TOPIC',
+      turnIndex: 0,
+      round: 0,
+      participants: participants,
+      topic: null
+    };
+    this.isDebating = true;
+
+    this.appendMeetingMessage("system", `⚔️ DEBATE STARTED between: ${participants.join(", ")}`);
+    this.appendMeetingMessage("system", "Debate Initialized. Waiting for topic...");
+    this.appendMeetingMessage("system", "Please enter the motion or topic for the debate.");
+
+    // Toggle button
+    const startBtn = document.getElementById("start-debate-btn");
+    startBtn.textContent = "End Debate";
+    startBtn.classList.remove("secondary-btn");
+    startBtn.classList.add("danger-btn");
+
+    const newBtn = startBtn.cloneNode(true);
+    startBtn.parentNode.replaceChild(newBtn, startBtn);
+    newBtn.addEventListener("click", () => this.handleEndDebate());
+
+    // Filter context to only debaters
+    this.originalMeetingAgents = { ...this.meetingAgents };
+    const newAgents = {};
+    Object.keys(this.meetingAgents).forEach(key => {
+      if (participants.includes(this.meetingAgents[key].name)) {
+        newAgents[key] = this.meetingAgents[key];
+      }
+    });
+    this.meetingAgents = newAgents;
+    this.updateMeetingContextAgents();
+    this.renderMeetingParticipants();
+  }
+
+  async handleEndDebate() {
+    if (!confirm("End debate and generate summary?")) return;
+
+    this.isDebating = false; // Stop the loop
+    this.appendMeetingMessage("system", "Debate ended. Generating summary...");
+
+    // Restore agents
+    this.meetingAgents = this.originalMeetingAgents;
+    this.updateMeetingContextAgents();
+    this.renderMeetingParticipants();
+
+    // Reset button
+    const endBtn = document.getElementById("start-debate-btn");
+    endBtn.textContent = "⚔️ Start Debate";
+    endBtn.classList.remove("danger-btn");
+    endBtn.classList.add("secondary-btn");
+
+    const newBtn = endBtn.cloneNode(true);
+    endBtn.parentNode.replaceChild(newBtn, endBtn);
+    newBtn.addEventListener("click", () => this.handleStartDebateClick());
+
+    // Generate Summary
+    try {
+      // Extract transcript since debate start
+      // Map history format to what backend expects (agent_name, response_text)
+      const debateTranscript = this.currentMeetingContext.history.slice(this.debateStartIndex).map(msg => ({
+        agent_name: msg.role === 'model' ? (msg.parts[0].split(':')[0] || 'Agent') : 'User',
+        response_text: msg.parts[0]
+      }));
+
+      const response = await fetch(`${this.api.baseUrl}/meetings/debate/summary`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          topic: document.getElementById("active-meeting-topic").textContent,
+          transcript: debateTranscript,
+          participants: this.activeDebateParticipants
+        })
+      });
+
+      if (!response.ok) throw new Error("Failed to generate summary");
+      const data = await response.json();
+
+      this.renderDebateSummary(data.summary);
+
+    } catch (error) {
+      console.error(error);
+      this.appendMeetingMessage("system", "Error generating debate summary.");
+    }
+  }
+
+  renderDebateSummary(summary) {
+    this.appendMeetingMessage("system", "--- DEBATE SUMMARY ---");
+    // Split by lines to avoid huge block
+    const lines = summary.split('\n');
+    let buffer = "";
+    lines.forEach(line => {
+      buffer += line + "\n";
+      if (buffer.length > 500) {
+        this.appendMeetingMessage("model", buffer);
+        buffer = "";
+      }
+    });
+    if (buffer) this.appendMeetingMessage("model", buffer);
+  }
+
+  async showAgentMenuForActiveMeeting(x, y) {
+    const agents = await this.api.getAgents();
+
+    // Filter out already seated agents
+    const seatedAgentNames = Object.values(this.meetingAgents).map(a => a.name);
+    const availableAgents = agents.filter(agent => !seatedAgentNames.includes(agent.name));
+
+    this.meetingAgentMenuList.innerHTML = "";
+
+    if (availableAgents.length === 0) {
+      this.meetingAgentMenuList.innerHTML = "<div style='padding:10px; color:#999'>No agents available</div>";
+    } else {
+      availableAgents.forEach(agent => {
+        const item = document.createElement("div");
+        item.className = "menu-item";
+        item.style.padding = "10px";
+        item.style.cursor = "pointer";
+        item.style.borderBottom = "1px solid #444";
+        item.textContent = agent.name;
+        item.onclick = () => {
+          this.showModelPickerForActiveMeeting(agent);
+          this.meetingAgentMenu.style.display = "none";
+        };
+        this.meetingAgentMenuList.appendChild(item);
+      });
+    }
+
+    this.meetingAgentMenu.style.display = "block";
+    this.meetingAgentMenu.style.left = `${x}px`;
+    this.meetingAgentMenu.style.top = `${y}px`;
+
+    // Close on click outside
+    const closeMenu = (e) => {
+      if (!this.meetingAgentMenu.contains(e.target) && e.target.id !== 'meeting-add-participant-btn') {
+        this.meetingAgentMenu.style.display = 'none';
+        document.removeEventListener('click', closeMenu);
+      }
+    };
+    setTimeout(() => document.addEventListener('click', closeMenu), 0);
+  }
+
+  showModelPickerForActiveMeeting(agent) {
+    const picker = document.createElement("div");
+    picker.style.cssText = `position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 10001; display: flex; justify-content: center; align-items: center;`;
+
+    const content = document.createElement("div");
+    content.style.cssText = `background: #2d2d2d; padding: 20px; border-radius: 8px; width: 300px; box-shadow: 0 4px 20px rgba(0,0,0,0.5);`;
+    content.innerHTML = `<h3 style="margin-top:0; color:#ecf0f1">Select Model for ${agent.name}</h3>`;
+
+    const list = document.createElement("div");
+    list.style.marginBottom = "20px";
+
+    // Load models
+    this.api.getSettings().then(settings => {
+      // Gemini
+      const btnG = document.createElement("button");
+      btnG.textContent = "☁️ Gemini 2.0 Flash";
+      btnG.className = "secondary-btn";
+      btnG.style.cssText = "width: 100%; margin-bottom: 10px; padding: 10px; text-align: left;";
+      btnG.onclick = () => {
+        this.addParticipantToMeeting(agent, "gemini", "Gemini 2.0 Flash");
+        document.body.removeChild(picker);
+      };
+      list.appendChild(btnG);
+
+      // Ollama
+      if (settings.ollama_models && settings.ollama_models.length) {
+        settings.ollama_models.forEach(m => {
+          const btn = document.createElement("button");
+          btn.textContent = `🖥️ ${m}`;
+          btn.className = "secondary-btn";
+          btn.style.cssText = "width: 100%; margin-bottom: 5px; padding: 10px; text-align: left;";
+          btn.onclick = () => {
+            this.addParticipantToMeeting(agent, "ollama", m);
+            document.body.removeChild(picker);
+          };
+          list.appendChild(btn);
+        });
+      }
+    });
+
+    const cancel = document.createElement("button");
+    cancel.textContent = "Cancel";
+    cancel.className = "secondary-btn";
+    cancel.style.width = "100%";
+    cancel.onclick = () => document.body.removeChild(picker);
+
+    content.appendChild(list);
+    content.appendChild(cancel);
+    picker.appendChild(content);
+    document.body.appendChild(picker);
+  }
+
+  addParticipantToMeeting(agent, provider, modelName) {
+    const newIndex = "dynamic_" + Date.now();
+    this.meetingAgents[newIndex] = {
+      name: agent.name,
+      data: agent,
+      model: { provider, name: modelName }
+    };
+    this.updateMeetingContextAgents();
+    this.renderMeetingParticipants();
+    this.appendMeetingMessage("system", `${agent.name} joined the meeting.`);
   }
 
   async handleEndMeeting() {
@@ -800,6 +1230,10 @@ class App {
   }
 
   displayMeetingMinutes(markdownText) {
+    if (!markdownText) {
+      console.error("displayMeetingMinutes received null or undefined text");
+      return;
+    }
     // Simple markdown to HTML converter
     let html = markdownText;
 
